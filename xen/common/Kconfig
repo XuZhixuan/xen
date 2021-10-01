@@ -1,6 +1,9 @@
 
 menu "Common Features"
 
+config BOOTFDT
+	bool
+
 config COMPAT
 	bool
 	help
