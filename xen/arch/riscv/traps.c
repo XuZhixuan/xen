@@ -12,6 +12,31 @@
 #include <asm/processor.h>
 #include <asm/traps.h>
 
+#define cast_to_bug_frame(addr) \
+    (const struct bug_frame *)(addr)
+
+/*
+ * Initialize the trap handling.
+ *
+ * The function is called after MMU is enabled.
+ */
+void trap_init(void)
+{
+    /*
+     * When the MMU is off, addr varialbe will be a physical address otherwise
+     * it would be a virtual address.
+     *
+     * It will work fine as:
+     *  - access to addr is PC-relative.
+     *  - -nopie is used. -nopie really suppresses the compiler emitting
+     *    code going through .got (which then indeed would mean using absolute
+     *    addresses).
+     */
+    unsigned long addr = (unsigned long)&handle_trap;
+
+    csr_write(CSR_STVEC, addr);
+}
+
 static const char *decode_trap_cause(unsigned long cause)
 {
     static const char *const trap_causes[] = {
