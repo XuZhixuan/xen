@@ -10,6 +10,4 @@
 
 #define BUG_INSTR ".word " __stringify(BUG_OPCODE)
 
-#define BUG_FN_REG r0
-
 #endif /* __ARM_ARM32_BUG_H__ */

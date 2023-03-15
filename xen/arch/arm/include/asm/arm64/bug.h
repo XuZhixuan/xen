@@ -6,6 +6,4 @@
 
 #define BUG_INSTR "brk " __stringify(BRK_BUG_FRAME_IMM)
 
-#define BUG_FN_REG x0
-
 #endif /* __ARM_ARM64_BUG_H__ */
