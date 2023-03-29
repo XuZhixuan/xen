@@ -37,6 +37,45 @@
 
 #define pt_index(lvl, va) (pt_linear_offset((lvl), (va)) & VPN_MASK)
 
+#ifndef __ASSEMBLY__
+
+#define clear_page(pgaddr)			memset((pgaddr), 0, PAGE_SIZE)
+#define copy_page(to, from)			memcpy((to), (from), PAGE_SIZE)
+
+/*
+ * Attribute Indexes.
+ *
+ */
+#define MT_NORMAL        0x0
+
+#define _PAGE_XN_BIT    3
+#define _PAGE_RO_BIT    4
+#define _PAGE_XN    (1U << _PAGE_XN_BIT)
+#define _PAGE_RO    (1U << _PAGE_RO_BIT)
+#define PAGE_XN_MASK(x) (((x) >> _PAGE_XN_BIT) & 0x1U)
+#define PAGE_RO_MASK(x) (((x) >> _PAGE_RO_BIT) & 0x1U)
+
+/*
+ * _PAGE_DEVICE and _PAGE_NORMAL are convenience defines. They are not
+ * meant to be used outside of this header.
+ */
+#define _PAGE_DEVICE    _PAGE_XN
+#define _PAGE_NORMAL    MT_NORMAL
+
+#define PAGE_HYPERVISOR_RO      (_PAGE_NORMAL|_PAGE_RO|_PAGE_XN)
+#define PAGE_HYPERVISOR_RX      (_PAGE_NORMAL|_PAGE_RO)
+#define PAGE_HYPERVISOR_RW      (_PAGE_NORMAL|_PAGE_XN)
+
+#define PAGE_HYPERVISOR         PAGE_HYPERVISOR_RW
+#define PAGE_HYPERVISOR_NOCACHE (_PAGE_DEVICE)
+#define PAGE_HYPERVISOR_WC      (_PAGE_DEVICE)
+
+/* Invalidate all instruction caches in Inner Shareable domain to PoU */
+static inline void invalidate_icache(void)
+{
+    asm volatile ("fence.i" ::: "memory");
+}
+
 /* Page Table entry */
 typedef struct {
 #ifdef CONFIG_RISCV_64
@@ -61,6 +100,11 @@ static inline bool pte_is_valid(pte_t p)
 {
     return p.pte & PTE_VALID;
 }
+
+#define PAGE_ALIGN(x) (((x) + PAGE_SIZE - 1) & PAGE_MASK)
+
+/* Flush the dcache for an entire page. */
+void flush_page_to_ram(unsigned long mfn, bool sync_icache);
 
 #endif /* __ASSEMBLY__ */
 
