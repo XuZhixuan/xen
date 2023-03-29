@@ -5,11 +5,11 @@
 #include <xen/init.h>
 #include <xen/kernel.h>
 #include <xen/pfn.h>
+#include <xen/mm.h>
 
 #include <asm/early_printk.h>
 #include <asm/csr.h>
 #include <asm/current.h>
-#include <asm/mm.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 

@@ -3,9 +3,9 @@
 #include <xen/bug.h>
 #include <xen/compile.h>
 #include <xen/init.h>
+#include <xen/mm.h>
 
 #include <asm/early_printk.h>
-#include <asm/mm.h>
 #include <asm/traps.h>
 
 /* Xen stack for bringing up the first CPU. */
