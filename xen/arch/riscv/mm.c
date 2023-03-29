@@ -26,12 +26,6 @@ unsigned long __ro_after_init phys_offset;
 #define LINK_TO_LOAD(addr) ((unsigned long)(addr) + phys_offset)
 
 /*
- * Should be removed as soon as enough headers will be merged for inclusion of
- * <xen/lib.h>.
- */
-#define ARRAY_SIZE(arr)		(sizeof(arr) / sizeof((arr)[0]))
-
-/*
  * It is expected that Xen won't be more then 2 MB.
  * The check in xen.lds.S guarantees that.
  * At least 3 page tables (in case of Sv39 ) are needed to cover 2 MB.
