@@ -67,6 +67,11 @@
 #define OPT_CONSOLE_STR "dtuart"
 #define INVALID_VCPU_ID MAX_VIRT_CPUS
 
+#define FRAMETABLE_VIRT_START  GB(5)
+#define FRAMETABLE_SIZE        GB(1)
+#define FRAMETABLE_NR          (FRAMETABLE_SIZE / sizeof(*frame_table))
+#define FRAMETABLE_VIRT_END    (FRAMETABLE_VIRT_START + FRAMETABLE_SIZE - 1)
+
 /* Linkage for RISCV */
 #ifdef __ASSEMBLY__
 #define ALIGN .align 4
@@ -82,6 +87,8 @@
 #else
 #error "RV32 isn't supported"
 #endif
+
+#define HYPERVISOR_VIRT_START XEN_VIRT_START
 
 #define SMP_CACHE_BYTES (1 << 6)
 
