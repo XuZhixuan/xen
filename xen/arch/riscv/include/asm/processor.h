@@ -12,6 +12,27 @@
 
 #ifndef __ASSEMBLY__
 
+register struct pcpu_info *tp asm ("tp");
+
+struct pcpu_info {
+    unsigned long processor_id;
+    /* cpu_info of the guest. Always on the top of the stack. */
+    struct cpu_info *guest_cpu_info;
+    /* CPU registers of the current trap. Differ from guest_cpu_info if trapped from xen. */
+    struct cpu_user_regs *stack_cpu_regs;
+
+    /* temporary variable to be used during save/restore of vcpu regs */
+    unsigned long tmp;
+};
+
+/* tp points to one of these */
+extern struct pcpu_info pcpu_info[NR_CPUS];
+
+#define get_processor_id()    (tp->processor_id)
+#define set_processor_id(id)  do {                          \
+    tp->processor_id = id;                            \
+} while(0)
+
 /* On stack VCPU state */
 struct cpu_user_regs
 {
@@ -52,6 +73,22 @@ struct cpu_user_regs
     /* pointer to previous stack_cpu_regs */
     unsigned long pregs;
 };
+
+void show_registers(const struct cpu_user_regs *regs);
+
+/* All a bit UP for the moment */
+#define cpu_to_core(_cpu)   (0)
+#define cpu_to_socket(_cpu) (0)
+
+/* Based on Linux: arch/riscv/include/asm/processor.h */
+
+static inline void cpu_relax(void)
+{
+	int dummy;
+	/* In lieu of a halt instruction, induce a long-latency stall. */
+	__asm__ __volatile__ ("div %0, %0, zero" : "=r" (dummy));
+	barrier();
+}
 
 static inline void wfi(void)
 {
