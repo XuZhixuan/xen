@@ -6,6 +6,7 @@ config RISCV_64
 	select 64BIT
 	# can be removed when Xen's common code will be ready
 	select EARLY_PRINTK
+	select HAS_PDX
 
 config ARCH_DEFCONFIG
 	string
