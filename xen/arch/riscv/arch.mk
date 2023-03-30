@@ -15,5 +15,5 @@ riscv-march-$(CONFIG_RISCV_ISA_C)       := $(riscv-march-y)c
 CFLAGS += -march=$(riscv-march-y) -mstrict-align -mcmodel=medany
 
 # TODO: Drop override when more of the build is working
-override ALL_OBJS-y = arch/$(TARGET_ARCH)/built_in.o
-override ALL_LIBS-y =
+override ALL_OBJS-y = common/built_in.o drivers/built_in.o lib/built_in.o arch/$(TARGET_ARCH)/built_in.o
+# override ALL_LIBS-y =
