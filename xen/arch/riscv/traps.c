@@ -8,6 +8,7 @@
 #include <xen/bug.h>
 #include <xen/errno.h>
 #include <xen/lib.h>
+#include <xen/sched.h>
 
 #include <asm/csr.h>
 #include <asm/early_printk.h>
@@ -246,4 +247,20 @@ void do_trap(struct cpu_user_regs *cpu_regs)
     }
 
     do_unexpected_trap(cpu_regs);
+}
+
+enum mc_disposition arch_do_multicall_call(struct mc_state *state)
+{
+    assert_failed("need to be implented");
+    return mc_continue;
+}
+
+void arch_hypercall_tasklet_result(struct vcpu *v, long res)
+{
+    assert_failed("need to be implented");
+}
+
+void vcpu_show_execution_state(struct vcpu *v)
+{
+    assert_failed("need to be implented");
 }
