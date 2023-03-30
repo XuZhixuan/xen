@@ -4,6 +4,7 @@
 #include <xen/compile.h>
 #include <xen/init.h>
 #include <xen/mm.h>
+#include <public/version.h>
 
 #include <asm/early_printk.h>
 #include <asm/traps.h>
@@ -11,6 +12,10 @@
 /* Xen stack for bringing up the first CPU. */
 unsigned char __initdata cpu0_boot_stack[STACK_SIZE]
     __aligned(STACK_SIZE);
+
+domid_t max_init_domid = 0;
+
+unsigned long total_pages;
 
 static void test_run_in_exception(struct cpu_user_regs *regs)
 {
@@ -24,6 +29,11 @@ static void test_macros_from_bug_h(void)
     WARN();
     early_printk("If you see this message, ");
     early_printk("WARN is most likely working\n");
+}
+
+void arch_get_xen_caps(xen_capabilities_info_t *info)
+{
+    assert_failed("need to be implemented");
 }
 
 void __init noreturn start_xen(unsigned long bootcpu_id,
