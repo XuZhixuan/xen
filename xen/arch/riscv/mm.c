@@ -5,7 +5,10 @@
 #include <xen/init.h>
 #include <xen/kernel.h>
 #include <xen/pfn.h>
+#include <xen/lib.h>
 #include <xen/mm.h>
+#include <xen/page-size.h>
+#include <asm/early_printk.h>
 
 #include <asm/early_printk.h>
 #include <asm/csr.h>
@@ -39,6 +42,19 @@ unsigned long __ro_after_init phys_offset;
  * (CONFIG_PAGING_LEVELS - 1) page tables are needed for identity mapping.
  */
 #define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) * 2 + 1)
+
+/* Limits of frametable */
+// unsigned long frametable_virt_end __read_mostly;
+unsigned long frametable_base_pdx;
+
+unsigned long max_page;
+
+/* Limits of the Xen heap */
+mfn_t xenheap_mfn_start __read_mostly = INVALID_MFN_INITIALIZER;
+mfn_t xenheap_mfn_end __read_mostly;
+vaddr_t xenheap_virt_end __read_mostly;
+vaddr_t xenheap_virt_start __read_mostly;
+unsigned long xenheap_base_pdx __read_mostly;
 
 pte_t __section(".bss.page_aligned") __aligned(PAGE_SIZE)
 stage1_pgtbl_root[PAGETABLE_ENTRIES];
@@ -291,3 +307,92 @@ void __init calc_phys_offset(void)
 {
     phys_offset = (unsigned long)start - XEN_VIRT_START;
 }
+
+unsigned long get_upper_mfn_bound(void)
+{
+    /* No memory hotplug yet, so current memory limit is the final one. */
+    return max_page - 1;
+}
+
+void put_page(struct page_info *page)
+{
+    assert_failed("need to implement");
+}
+
+bool get_page(struct page_info *page, const struct domain *domain)
+{
+    assert_failed("need to implement");
+
+    return false;
+}
+
+void put_page_type(struct page_info *page)
+{
+    return;
+}
+
+/* Common code requires get_page_type and put_page_type.
+ * We don't care about typecounts so we just do the minimum to make it
+ * happy. */
+int get_page_type(struct page_info *page, unsigned long type)
+{
+    return 1;
+}
+
+int page_is_ram_type(unsigned long mfn, unsigned long mem_type)
+{
+    ASSERT_UNREACHABLE();
+    return 0;
+}
+
+unsigned long domain_get_maximum_gpfn(struct domain *d)
+{
+    assert_failed("need to be implented\n");
+    return 0;
+}
+
+void flush_page_to_ram(unsigned long mfn, bool sync_icache)
+{
+    assert_failed("need to be implented\n");
+}
+
+int xenmem_add_to_physmap_one(struct domain *d, unsigned int space,
+                              union add_to_physmap_extra extra,
+                              unsigned long idx, gfn_t gfn)
+{
+    WARN();
+
+    return 0;
+}
+
+struct domain *page_get_owner_and_reference(struct page_info *page)
+{
+    assert_failed("need to be implented\n");
+
+    return NULL;
+}
+
+paddr_t __virt_to_maddr(vaddr_t va)
+{
+    assert_failed("need to be implented\n");
+
+    return 0;
+}
+
+long arch_memory_op(int op, XEN_GUEST_HANDLE_PARAM(void) arg)
+{
+    WARN();
+
+    return 0;
+}
+
+int steal_page(struct domain *d, struct page_info *page, unsigned int memflags)
+{
+    return -EOPNOTSUPP;
+}
+
+void arch_dump_shared_mem_info(void)
+{
+    WARN();
+}
+
