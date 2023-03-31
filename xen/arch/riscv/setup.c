@@ -8,6 +8,7 @@
 #include <xen/mm.h>
 #include <xen/percpu.h>
 #include <xen/setup.h>
+#include <xen/smp.h>
 #include <xen/virtual_region.h>
 #include <public/version.h>
 
@@ -75,6 +76,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     percpu_init_areas();
 
     setup_virtual_regions(NULL, NULL);
+    smp_clear_cpu_maps();
 
     early_printk("Hello from C env\n");
 
