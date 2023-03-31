@@ -6,7 +6,9 @@
 #include <xen/device_tree.h>
 #include <xen/init.h>
 #include <xen/mm.h>
+#include <xen/percpu.h>
 #include <xen/setup.h>
+#include <xen/virtual_region.h>
 #include <public/version.h>
 
 #include <asm/early_printk.h>
@@ -69,6 +71,10 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     set_processor_id(bootcpu_id);
 
     remove_identity_mapping();
+
+    percpu_init_areas();
+
+    setup_virtual_regions(NULL, NULL);
 
     early_printk("Hello from C env\n");
 
