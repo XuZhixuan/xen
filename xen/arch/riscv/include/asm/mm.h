@@ -4,6 +4,7 @@
 #define _ASM_RISCV_MM_H
 
 #include <xen/kernel.h>
+#include <xen/types.h>
 #include <asm/page.h>
 #include <asm/pgtable-bits.h>
 #include <public/xen.h>
@@ -285,6 +286,8 @@ void enable_mmu(void);
 void remove_identity_mapping(void);
 
 void calc_phys_offset(void);
+
+void* early_fdt_map(paddr_t fdt_paddr);
 
 #endif /* _ASM_RISCV_MM_H */
 /*

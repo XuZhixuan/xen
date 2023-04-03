@@ -6,6 +6,7 @@
 #include <xen/kernel.h>
 #include <xen/pfn.h>
 #include <xen/lib.h>
+#include <xen/libfdt/libfdt.h>
 #include <xen/mm.h>
 #include <xen/page-size.h>
 #include <asm/early_printk.h>
@@ -21,7 +22,7 @@ struct mmu_desc {
     unsigned int pgtbl_count;
     pte_t *next_pgtbl;
     pte_t *pgtbl_base;
-};
+} mmu_desc = { CONFIG_PAGING_LEVELS, 0, NULL, 0 };
 
 unsigned long __ro_after_init phys_offset;
 
@@ -40,8 +41,11 @@ unsigned long __ro_after_init phys_offset;
  * isn't 2 MB aligned.
  *
  * (CONFIG_PAGING_LEVELS - 1) page tables are needed for identity mapping.
+ * 
+ * (CONFIG_PAGING_LEVELS) page tables are needed for device tree mapping:
+ * In case of Sv39: 1 pt -> L1, 1-2pt -> L0 ( depends on FDT address )
  */
-#define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) * 2 + 1)
+#define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) * 3 + 1 + 1)
 
 /* Limits of frametable */
 // unsigned long frametable_virt_end __read_mostly;
@@ -220,8 +224,6 @@ static bool __init check_pgtbl_mode_support(struct mmu_desc *mmu_desc,
  */
 void __init setup_initial_pagetables(void)
 {
-    struct mmu_desc mmu_desc = { CONFIG_PAGING_LEVELS, 0, NULL, NULL };
-
     /*
      * Access to _start, _end is always PC-relative thereby when access
      * them we will get load adresses of start and end of Xen.
@@ -306,6 +308,24 @@ void __init remove_identity_mapping(void)
 void __init calc_phys_offset(void)
 {
     phys_offset = (unsigned long)start - XEN_VIRT_START;
+}
+
+void* __init early_fdt_map(paddr_t fdt_paddr)
+{
+    unsigned long dt_phys_base = fdt_paddr;
+    unsigned long dt_virt_base;
+    unsigned long dt_virt_size;
+
+    dt_virt_base = LOAD_TO_LINK((unsigned long)_start) - fdt_totalsize(fdt_paddr);
+    dt_virt_base &= XEN_PT_LEVEL_MAP_MASK(0);
+    dt_virt_size = LOAD_TO_LINK((unsigned long)_start) - dt_virt_base;
+
+    /* Map device tree */
+    setup_initial_mapping(&mmu_desc, dt_virt_base,
+                    dt_virt_base + dt_virt_size,
+                    dt_phys_base);
+
+    return (void *)dt_virt_base;
 }
 
 unsigned long get_upper_mfn_bound(void)
