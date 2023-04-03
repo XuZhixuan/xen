@@ -41,6 +41,9 @@ ENTRY(start)
 
         jal     setup_initial_pagetables
 
+        mv      a0, s1
+        jal     fdt_map
+
         jal     enable_mmu
 
         la      t1, phys_offset

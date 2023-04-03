@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <xen/bootfdt.h>
 #include <xen/bug.h>
 #include <xen/compile.h>
+#include <xen/device_tree.h>
 #include <xen/init.h>
 #include <xen/mm.h>
 #include <xen/setup.h>
@@ -39,9 +41,22 @@ void arch_get_xen_caps(xen_capabilities_info_t *info)
     assert_failed("need to be implemented");
 }
 
+void __init fdt_map(paddr_t dtb_addr)
+{
+    device_tree_flattened = early_fdt_map(dtb_addr);
+    if ( !device_tree_flattened )
+    {
+        early_printk("wrong FDT\n");
+        die();
+    }
+}
+
 void __init noreturn start_xen(unsigned long bootcpu_id,
                                paddr_t dtb_addr)
 {
+    size_t fdt_size;
+    const char *cmdline;
+
     /*
      * tp register contains an address of physical cpu information.
      * So write physical CPU info of boot cpu to tp register
@@ -60,6 +75,12 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     trap_init();
 
     test_macros_from_bug_h();
+
+    fdt_size = boot_fdt_info(device_tree_flattened, dtb_addr);
+
+    cmdline = boot_fdt_cmdline(device_tree_flattened);
+    printk("Command line: %s\n", cmdline);
+    cmdline_parse(cmdline);
 
     early_printk("All set up\n");
 
