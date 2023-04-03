@@ -14,6 +14,7 @@
 #include <asm/page-bits.h>
 
 extern unsigned char cpu0_boot_stack[];
+extern unsigned long phys_offset;
 
 /* Align Xen to a 2 MiB boundary. */
 // #define XEN_PADDR_ALIGN (1 << 21)

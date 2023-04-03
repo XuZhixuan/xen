@@ -57,6 +57,7 @@ void __init fdt_map(paddr_t dtb_addr)
 void __init noreturn start_xen(unsigned long bootcpu_id,
                                paddr_t dtb_addr)
 {
+    struct bootmodule *xen_bootmodule;
     size_t fdt_size;
     const char *cmdline;
 
@@ -89,6 +90,13 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     cmdline = boot_fdt_cmdline(device_tree_flattened);
     printk("Command line: %s\n", cmdline);
     cmdline_parse(cmdline);
+
+    /* Register Xen's load address as a boot module. */
+    xen_bootmodule = add_boot_module(BOOTMOD_XEN,
+                        (paddr_t)((unsigned long)_start + phys_offset),
+                        (paddr_t)(_end - _start), false);
+
+    BUG_ON(!xen_bootmodule);
 
     early_printk("All set up\n");
 
