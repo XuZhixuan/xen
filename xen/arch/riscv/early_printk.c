@@ -34,7 +34,7 @@ void early_puts(const char *s, size_t nr)
 
 void early_printk(const char *str)
 {
-    while ( *str )
+    while ( str && *str )
     {
         early_puts(str, 1);
         str++;
