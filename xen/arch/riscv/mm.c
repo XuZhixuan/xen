@@ -66,6 +66,9 @@ stage1_pgtbl_root[PAGETABLE_ENTRIES];
 pte_t __section(".bss.page_aligned") __aligned(PAGE_SIZE)
 stage1_pgtbl_nonroot[PGTBL_INITIAL_COUNT * PAGETABLE_ENTRIES];
 
+pte_t __section(".bss.page_aligned") __aligned(PAGE_SIZE)
+xen_fixmap[PAGETABLE_ENTRIES];
+
 #define HANDLE_PGTBL(curr_lvl_num)                                          \
     index = pt_index(curr_lvl_num, page_addr);                              \
     if ( pte_is_valid(pgtbl[index]) )                                       \
@@ -206,6 +209,39 @@ static bool __init check_pgtbl_mode_support(struct mmu_desc *mmu_desc,
     stage1_pgtbl_root[index] = paddr_to_pte(0x0, 0x0);
 
     return is_mode_supported;
+}
+
+void __init setup_fixmap_mappings(void)
+{
+    pte_t *pte;
+    unsigned int i = 0;
+
+    pte = &stage1_pgtbl_root[pt_index(HYP_PT_ROOT_LEVEL, FIXMAP_ADDR(0))];
+
+    /* get pointer to L1 */
+    for ( i = 1; i < HYP_PT_ROOT_LEVEL; i++ )
+    {
+        BUG_ON( !pte_is_valid(*pte) );
+
+        pte = (pte_t *)pte_to_paddr(*pte);
+        pte = &pte[pt_index(convert_level(i), FIXMAP_ADDR(0))];
+    }
+
+    BUG_ON( pte_is_valid(*pte) );
+
+    if ( !pte_is_valid(*pte) )
+    {
+        pte_t tmp = paddr_to_pte((unsigned long)&xen_fixmap, PTE_TABLE);
+
+        write_pte(pte, tmp);
+
+        early_printk("(XEN) fixmap is mapped\n");
+    }
+
+    /*
+     * We only need the zeroeth table allocated, but not the PTEs set, because
+     * set_fixmap() will set them on the fly.
+     */
 }
 
 /*

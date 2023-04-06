@@ -286,6 +286,8 @@ void calc_phys_offset(void);
 
 void* early_fdt_map(paddr_t fdt_paddr);
 
+void setup_fixmap_mappings(void);
+
 #endif /* _ASM_RISCV_MM_H */
 /*
  * Local variables:
