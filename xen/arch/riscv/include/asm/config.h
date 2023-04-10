@@ -67,11 +67,6 @@
 #define OPT_CONSOLE_STR "dtuart"
 #define INVALID_VCPU_ID MAX_VIRT_CPUS
 
-#define FRAMETABLE_VIRT_START  GB(5)
-#define FRAMETABLE_SIZE        GB(1)
-#define FRAMETABLE_NR          (FRAMETABLE_SIZE / sizeof(*frame_table))
-#define FRAMETABLE_VIRT_END    (FRAMETABLE_VIRT_START + FRAMETABLE_SIZE - 1)
-
 /* Linkage for RISCV */
 #ifdef __ASSEMBLY__
 #define ALIGN .align 4
@@ -82,8 +77,45 @@
   name:
 #endif
 
+#ifndef SATP_MODE_SV32
+#define VPN2_BITS   (9)
+#define VPN1_BITS   (9)
+#define VPN0_BITS   (9)
+#else
+#define VPN1_BITS   (9)
+#define VPN0_BITS   (9)
+#endif
+
+#define OFFSET_BITS (12)
+
 #ifdef CONFIG_RISCV_64
-#define XEN_VIRT_START 0xFFFFFFFFC0000000 /* (_AC(-1, UL) + 1 - GB(1)) */
+
+/* SLOT2_ENTRY_BITS == 30 */
+#define SLOT2_ENTRY_BITS  (VPN1_BITS + VPN2_BITS + OFFSET_BITS)
+#define SLOT2(slot)       (_AT(vaddr_t,slot) << SLOT2_ENTRY_BITS)
+#define SLOT2_ENTRY_SIZE  SLOT2(1)
+
+#define MAX_XEN_SIZE      MB(2)
+#define MAX_FDT_SIZE_     MB(4)
+#define MAX_FIXMAP_SIZE   MB(2)
+
+#define XEN_VIRT_START    (0xFFFFFFFFC0000000) /* (_AC(-1, UL) + 1 - GB(1)) */
+
+#define FDT_VIRT_START          (XEN_VIRT_START + MAX_XEN_SIZE)
+
+#define FIXMAP_BASE             (FDT_VIRT_START + MAX_FDT_SIZE_)
+#define FIXMAP_ADDR(n)          (FIXMAP_BASE + (n) * PAGE_SIZE)
+
+#define DIRECTMAP_SIZE          (SLOT2_ENTRY_SIZE * (509-200))
+#define DIRECTMAP_VIRT_END      (DIRECTMAP_VIRT_START + DIRECTMAP_SIZE - 1)
+#define XENHEAP_VIRT_START      directmap_virt_start
+#define DIRECTMAP_VIRT_START    SLOT2(200)
+
+#define FRAMETABLE_VIRT_START   SLOT2(196)
+#define FRAMETABLE_SIZE         GB(3)
+#define FRAMETABLE_NR           (FRAMETABLE_SIZE / sizeof(*frame_table))
+#define FRAMETABLE_VIRT_END     (FRAMETABLE_VIRT_START + FRAMETABLE_SIZE - 1)
+
 #else
 #error "RV32 isn't supported"
 #endif
