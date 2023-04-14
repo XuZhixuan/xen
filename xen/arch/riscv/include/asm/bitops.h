@@ -169,6 +169,16 @@ extern unsigned long find_next_zero_bit(const unsigned long *addr, unsigned
 extern unsigned long find_first_bit(const unsigned long *addr,
 				    unsigned long size);
 
+/**
+ * find_first_zero_bit - find the first cleared bit in a memory region
+ * @addr: The address to start the search at
+ * @size: The maximum size to search
+ *
+ * Returns the bit number of the first cleared bit.
+ */
+extern unsigned long find_first_zero_bit(const unsigned long *addr,
+					 unsigned long size);
+
 #define ffs(x) ({ unsigned int __t = (x); fls(__t & -__t); })
 /**
  * ffs - find first bit in word.
@@ -253,7 +263,7 @@ static inline unsigned int ffsl(unsigned long word)
  *
  * Undefined if no zero exists, so code should check against ~0UL first.
  */
-#define ffz(x)  ffs(~(x))
+#define ffz(x)  __ffs(~(x))
 
 /**
  * find_first_set_bit - find the first set bit in @word

@@ -452,3 +452,8 @@ void arch_dump_shared_mem_info(void)
     WARN();
 }
 
+inline pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr)
+{
+    assert_failed(__func__);
+}
+

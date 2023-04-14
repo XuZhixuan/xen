@@ -288,6 +288,8 @@ void* early_fdt_map(paddr_t fdt_paddr);
 
 void setup_fixmap_mappings(void);
 
+pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr);
+
 #endif /* _ASM_RISCV_MM_H */
 /*
  * Local variables:
