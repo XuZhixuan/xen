@@ -2,6 +2,7 @@ obj-y += delay.o
 obj-y += domain.o
 obj-y += domctl.o
 obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
+obj-y += efi/
 obj-y += entry.o
 obj-y += guestcopy.o
 obj-y += irq.o
