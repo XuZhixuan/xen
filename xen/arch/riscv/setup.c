@@ -4,6 +4,7 @@
 #include <xen/compile.h>
 #include <xen/init.h>
 #include <xen/mm.h>
+#include <xen/setup.h>
 #include <public/version.h>
 
 #include <asm/early_printk.h>
@@ -15,6 +16,7 @@ unsigned char __initdata cpu0_boot_stack[STACK_SIZE]
     __aligned(STACK_SIZE);
 
 domid_t max_init_domid = 0;
+struct bootinfo __initdata bootinfo;
 
 unsigned long total_pages;
 
