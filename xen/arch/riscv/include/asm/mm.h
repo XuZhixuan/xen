@@ -11,10 +11,10 @@
 #include <xen/pdx.h>
 #include <xen/errno.h>
 
-#include <asm/page-bits.h>
-
 extern unsigned char cpu0_boot_stack[];
 extern unsigned long phys_offset;
+
+#define convert_level(level) (HYP_PT_ROOT_LEVEL - level)
 
 /* Align Xen to a 2 MiB boundary. */
 // #define XEN_PADDR_ALIGN (1 << 21)
@@ -133,10 +133,6 @@ struct page_info
 
 #define _PGC_extra        PG_shift(10)
 #define PGC_extra         PG_mask(1, 10)
-
-extern mfn_t xenheap_mfn_start, xenheap_mfn_end;
-extern vaddr_t xenheap_virt_end;
-extern vaddr_t xenheap_virt_start;
 
 #define is_xen_heap_page(page) ((page)->count_info & PGC_xen_heap)
 #define is_xen_heap_mfn(mfn) \

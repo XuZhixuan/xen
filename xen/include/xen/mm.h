@@ -213,7 +213,62 @@ extern struct domain *dom_cow;
 
 #define page_list_entry list_head
 
+#ifdef CONFIG_MM
+
+extern mfn_t directmap_mfn_start, directmap_mfn_end;
+extern vaddr_t directmap_virt_end;
+extern vaddr_t directmap_virt_start;
+extern unsigned long directmap_base_pdx;
+
+#endif /* CONFIG_MM */
+
 #include <asm/mm.h>
+
+/*
+ * common/mm.c code is based on ARM implementation and for some function
+ * should be calculated correct page table level as unlike the x86/RISCV
+ * pagetable code, where l1 is the lowest level and
+ * l4 is the root of the trie, the ARM pagetables follow ARM's documentation:
+ * the levels are called first, second &c in the order that the MMU walks them
+ * (i.e. "first" is the root of the trie).
+ */
+#ifndef convert_level
+#define convert_level(level) (level)
+#endif
+
+#ifdef CONFIG_MM
+
+/*
+ * For Arm32, set up the direct-mapped xenheap: up to 1GB of contiguous,
+ * always-mapped memory. Base must be 32MB aligned and size a multiple of 32MB.
+ * For Arm64, map the region in the directmap area.
+ */
+void setup_directmap_mappings(unsigned long base_mfn, unsigned long nr_mfns);
+/* Map a frame table to cover physical addresses ps through pe */
+void setup_frametable_mappings(paddr_t ps, paddr_t pe);
+
+pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr);
+
+void set_pte_table_bit(pte_t *pte, unsigned int tbl_bit_val);
+
+bool sanity_arch_specific_pte_checks(pte_t entry);
+
+unsigned int get_contig_bit(pte_t entry);
+
+void set_pte_permissions(pte_t *pte, unsigned int flags);
+
+const mfn_t get_root_page(void);
+
+int xen_pt_mapping_level(unsigned long vfn, mfn_t mfn, unsigned long nr,
+                         unsigned int flags);
+
+unsigned int xen_pt_check_contig(unsigned long vfn, mfn_t mfn,
+                                 unsigned int level, unsigned long left,
+                                 unsigned int flags);
+
+void flush_xen_tlb_range_va(vaddr_t va, unsigned long size);
+
+#endif /* CONFIG_MM */
 
 static inline bool is_special_page(const struct page_info *page)
 {

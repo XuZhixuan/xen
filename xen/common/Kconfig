@@ -83,6 +83,9 @@ config MEM_ACCESS
 	  Framework to configure memory access types for guests and receive
 	  related events in userspace.
 
+config MM
+	bool
+
 config NEEDS_LIBELF
 	bool
 

@@ -129,4 +129,6 @@ const char * boot_module_kind_as_string(bootmodule_kind kind);
 void add_boot_cmdline(const char *name, const char *cmdline,
                              bootmodule_kind kind, paddr_t start, bool domU);
 
+void setup_mm(void);
+
 #endif /* __XEN_SETUP_H__ */

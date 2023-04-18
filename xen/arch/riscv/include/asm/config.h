@@ -134,6 +134,8 @@
 #define RV_STAGE1_MODE SATP_MODE_SV32
 #endif
 
+#define HYP_PT_ROOT_LEVEL (CONFIG_PAGING_LEVELS - 1)
+
 #endif /* __RISCV_CONFIG_H__ */
 /*
  * Local variables:
