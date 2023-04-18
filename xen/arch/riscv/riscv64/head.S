@@ -44,6 +44,8 @@ ENTRY(start)
         mv      a0, s1
         jal     fdt_map
 
+        jal     setup_fixmap_mappings
+
         jal     enable_mmu
 
         la      t1, phys_offset

@@ -11,6 +11,7 @@ config RISCV_64
 	select HAS_DEVICE_TREE
 	select HAS_PDX
 	select HAS_PMAP
+	select MM
 
 config ARCH_DEFCONFIG
 	string

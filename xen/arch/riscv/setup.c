@@ -98,6 +98,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     BUG_ON(!xen_bootmodule);
 
+    setup_mm();
+
     early_printk("All set up\n");
 
     for ( ;; )

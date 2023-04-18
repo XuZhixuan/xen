@@ -2,6 +2,7 @@
 
 #include <xen/cache.h>
 #include <xen/compiler.h>
+#include <xen/domain_page.h>
 #include <xen/init.h>
 #include <xen/kernel.h>
 #include <xen/pfn.h>
@@ -9,6 +10,7 @@
 #include <xen/libfdt/libfdt.h>
 #include <xen/mm.h>
 #include <xen/page-size.h>
+#include <xen/pmap.h>
 #include <asm/early_printk.h>
 
 #include <asm/early_printk.h>
@@ -47,18 +49,7 @@ unsigned long __ro_after_init phys_offset;
  */
 #define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) * 3 + 1 + 1)
 
-/* Limits of frametable */
-// unsigned long frametable_virt_end __read_mostly;
-unsigned long frametable_base_pdx;
-
 unsigned long max_page;
-
-/* Limits of the Xen heap */
-mfn_t xenheap_mfn_start __read_mostly = INVALID_MFN_INITIALIZER;
-mfn_t xenheap_mfn_end __read_mostly;
-vaddr_t xenheap_virt_end __read_mostly;
-vaddr_t xenheap_virt_start __read_mostly;
-unsigned long xenheap_base_pdx __read_mostly;
 
 pte_t __section(".bss.page_aligned") __aligned(PAGE_SIZE)
 stage1_pgtbl_root[PAGETABLE_ENTRIES];
@@ -452,8 +443,137 @@ void arch_dump_shared_mem_info(void)
     WARN();
 }
 
-inline pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr)
+static inline pte_t mfn_to_pte(mfn_t mfn)
 {
-    assert_failed(__func__);
+    unsigned long pte = mfn_x(mfn) << PTE_PPN_SHIFT;
+    return (pte_t){ .pte = pte};
 }
 
+inline pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr)
+{
+    /* there is no attr field in RISC-V's pte */
+    (void) attr;
+
+    return mfn_to_pte(mfn);
+}
+
+/* Return the level where mapping should be done */
+int xen_pt_mapping_level(unsigned long vfn, mfn_t mfn, unsigned long nr,
+                                unsigned int flags)
+{
+    unsigned int level = 0;
+    unsigned long mask;
+    unsigned int i = 0;
+
+    /*
+     * Don't take into account the MFN when removing mapping (i.e
+     * MFN_INVALID) to calculate the correct target order.
+     *
+     * Per the Arm Arm, `vfn` and `mfn` must be both superpage aligned.
+     * They are or-ed together and then checked against the size of
+     * each level.
+     *
+     * `left` is not included and checked separately to allow
+     * superpage mapping even if it is not properly aligned (the
+     * user may have asked to map 2MB + 4k).
+     */
+    mask = !mfn_eq(mfn, INVALID_MFN) ? mfn_x(mfn) : 0;
+    mask |= vfn;
+
+    /*
+    * Always use level 3 mapping unless the caller request block
+    * mapping.
+    */
+    if ( likely(!(flags & _PAGE_BLOCK)) )
+        return level;
+
+    for ( i = 0; i < CONFIG_PAGING_LEVELS; i++ )
+    {
+        if ( !(mask & (BIT(XEN_PT_LEVEL_ORDER(convert_level(i)), UL) - 1)) &&
+            (nr >= BIT(XEN_PT_LEVEL_ORDER(convert_level(i)), UL)) )
+        {
+            level = convert_level(i);
+            break;
+        }
+    }
+
+    return level;
+}
+
+/*
+ * Check whether the contiguous bit can be set. Return the number of
+ * contiguous entry allowed. If not allowed, return 1.
+ */
+unsigned int xen_pt_check_contig(unsigned long vfn, mfn_t mfn,
+                                 unsigned int level, unsigned long left,
+                                 unsigned int flags)
+{
+    /* there is no contig bit in RISC-V */
+    return 1;
+}
+
+int populate_pt_range(unsigned long virt, unsigned long nr_mfns)
+{
+    (void) virt;
+    (void) nr_mfns;
+
+    assert_failed(__func__);
+
+    return  0;
+}
+
+int destroy_xen_mappings(unsigned long v, unsigned long e)
+{
+    (void) v;
+    (void) e;
+
+    assert_failed(__func__);
+
+    return 0;
+}
+
+void set_pte_table_bit(pte_t *pte, unsigned int tbl_bit_val)
+{
+    /* table bit for RISC-V is always equal to PTE_TABLE */
+    (void) tbl_bit_val;
+
+    pte->pte |= PTE_TABLE;
+}
+
+bool sanity_arch_specific_pte_checks(pte_t entry)
+{
+    /* there is no RISC-V specific PTE checks */
+    return true;
+}
+
+unsigned int get_contig_bit(pte_t entry)
+{
+    /* there is no contig bit */
+    (void) entry;
+
+    return 0;
+}
+
+void set_pte_permissions(pte_t *pte, unsigned int flags)
+{
+    pte->bits.r = PAGE_RO_MASK(flags);
+    pte->bits.x = ~PAGE_XN_MASK(flags);
+    pte->bits.w = PAGE_W_MASK(flags);
+}
+
+const mfn_t get_root_page(void)
+{
+    unsigned long root_maddr = csr_read(CSR_SATP) << PAGE_SHIFT;
+
+    return maddr_to_mfn(root_maddr);
+}
+
+inline void flush_xen_tlb_range_va(vaddr_t va,
+                                   unsigned long size)
+{
+    /* TODO: implement  flush of specific range va */
+    (void) va;
+    (void) size;
+
+    asm volatile("sfence.vma");
+}

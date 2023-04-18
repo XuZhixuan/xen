@@ -32,6 +32,17 @@ extern unsigned long phys_offset;
 
 extern unsigned long frametable_base_pdx;
 
+/*
+ * The size of struct page_info impacts the number of entries that can fit
+ * into the frametable area and thus it affects the amount of physical memory
+ * we claim to support. Define PAGE_INFO_SIZE to be used for sanity checking.
+*/
+#ifdef CONFIG_RISCV_64
+#define PAGE_INFO_SIZE 56
+#else
+#define PAGE_INFO_SIZE 32
+#endif
+
 struct page_info
 {
     /* Each frame can be threaded onto a doubly-linked list. */
@@ -95,7 +106,6 @@ struct page_info
         u32 tlbflush_timestamp;
     };
     u64 pad;
-
 };
 
 #define PG_shift(idx)   (BITS_PER_LONG - (idx))
@@ -183,23 +193,12 @@ extern unsigned long xenheap_base_pdx;
 
 static inline void *maddr_to_virt(paddr_t ma)
 {
-    /*
-     *  Can't add here:
-     *      assert_failed("need to be implemeted\n");
-     *  The following compilation error will be produced:
-     *      common/event_fifo.c: In function 'map_control_block':
-     *      common/event_fifo.c:498:26: error: 'virt' may be used
-     *                              uninitialized [-Werror=maybe-uninitialized]
-     *      498 |     control_block = virt + offset;
-     *          |                     ~~~~~^~~~~~~~
-     *      common/event_fifo.c:486:11: note: 'virt' declared here
-     *      486 |     void *virt;
-     *          |           ^~~~
-     *      cc1: all warnings being treated as erro
-     */
-    WARN();
-
-    return (void *)0xF00B00;
+    ASSERT((mfn_to_pdx(maddr_to_mfn(ma)) - directmap_base_pdx) <
+           (DIRECTMAP_SIZE >> PAGE_SHIFT));
+    return (void *)(XENHEAP_VIRT_START -
+                    (directmap_base_pdx << PAGE_SHIFT) +
+                    ((ma & ma_va_bottom_mask) |
+                     ((ma & ma_top_mask) >> pfn_pdx_hole_shift)));
 }
 
 paddr_t __virt_to_maddr(vaddr_t va);
@@ -209,6 +208,8 @@ paddr_t __virt_to_maddr(vaddr_t va);
 /* Convert between Xen-heap virtual addresses and machine frame numbers. */
 #define __virt_to_mfn(va)  paddr_to_pfn((vaddr_t)va)
 #define __mfn_to_virt(mfn) (maddr_to_virt((paddr_t)(mfn) << PAGE_SHIFT))
+
+#define pte_get_mfn(pte) maddr_to_mfn(pte_to_paddr(pte))
 
 /*
  * Page needs to be scrubbed. Since this bit can only be set on a page that is
@@ -287,8 +288,6 @@ void calc_phys_offset(void);
 void* early_fdt_map(paddr_t fdt_paddr);
 
 void setup_fixmap_mappings(void);
-
-pte_t mfn_to_xen_entry(mfn_t mfn, unsigned int attr);
 
 #endif /* _ASM_RISCV_MM_H */
 /*

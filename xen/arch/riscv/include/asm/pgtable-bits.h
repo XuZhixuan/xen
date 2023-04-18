@@ -35,8 +35,8 @@
 
 /* Set of bits to preserve across pte_modify() */
 #define _PAGE_CHG_MASK  (~(unsigned long)(_PAGE_PRESENT | _PAGE_READ |	\
-					  _PAGE_WRITE | _PAGE_EXEC |	\
-					  _PAGE_USER | _PAGE_GLOBAL))
+                         _PAGE_WRITE | _PAGE_EXEC | \
+                         _PAGE_USER | _PAGE_GLOBAL))
 
 #define PAGE_AI_MASK(x) ((x) & _PAGE_CHG_MASK)
 
