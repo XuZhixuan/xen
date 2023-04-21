@@ -398,11 +398,6 @@ unsigned long domain_get_maximum_gpfn(struct domain *d)
     return 0;
 }
 
-void flush_page_to_ram(unsigned long mfn, bool sync_icache)
-{
-    assert_failed("need to be implented\n");
-}
-
 int xenmem_add_to_physmap_one(struct domain *d, unsigned int space,
                               union add_to_physmap_extra extra,
                               unsigned long idx, gfn_t gfn)
@@ -510,16 +505,6 @@ unsigned int xen_pt_check_contig(unsigned long vfn, mfn_t mfn,
 {
     /* there is no contig bit in RISC-V */
     return 1;
-}
-
-int populate_pt_range(unsigned long virt, unsigned long nr_mfns)
-{
-    (void) virt;
-    (void) nr_mfns;
-
-    assert_failed(__func__);
-
-    return  0;
 }
 
 int destroy_xen_mappings(unsigned long v, unsigned long e)

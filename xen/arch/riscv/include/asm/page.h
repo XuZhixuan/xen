@@ -101,6 +101,15 @@ static inline void invalidate_icache(void)
     asm volatile ("fence.i" ::: "memory");
 }
 
+static inline int clean_and_invalidate_dcache_va_range
+    (const void *p, unsigned long size)
+{
+    /* TODO: does RISC-V support clean and invlalidate of dcache */
+    asm volatile("sfence.vma");
+
+    return 0;
+}
+
 typedef struct {
     unsigned long v:1;
     unsigned long r:1;

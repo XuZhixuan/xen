@@ -10,6 +10,7 @@
 #include <xen/setup.h>
 #include <xen/smp.h>
 #include <xen/virtual_region.h>
+#include <xen/vmap.h>
 #include <public/version.h>
 
 #include <asm/early_printk.h>
@@ -99,6 +100,16 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     BUG_ON(!xen_bootmodule);
 
     setup_mm();
+
+    end_boot_allocator();
+
+    /*
+     * The memory subsystem has been initialized, we can now switch from
+     * early_boot -> boot.
+     */
+    system_state = SYS_STATE_boot;
+
+    vm_init();
 
     early_printk("All set up\n");
 

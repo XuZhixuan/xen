@@ -116,6 +116,9 @@
 #define FRAMETABLE_NR           (FRAMETABLE_SIZE / sizeof(*frame_table))
 #define FRAMETABLE_VIRT_END     (FRAMETABLE_VIRT_START + FRAMETABLE_SIZE - 1)
 
+#define VMAP_VIRT_START         SLOT2(194)
+#define VMAP_VIRT_SIZE          GB(1)
+
 #else
 #error "RV32 isn't supported"
 #endif

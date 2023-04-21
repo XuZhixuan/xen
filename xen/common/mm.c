@@ -504,3 +504,32 @@ void __init setup_frametable_mappings(paddr_t ps, paddr_t pe)
     frametable_virt_end = FRAMETABLE_VIRT_START + (nr_pdxs * sizeof(struct page_info));
 }
 
+void *__init arch_vmap_virt_end(void)
+{
+    return (void *)(VMAP_VIRT_START + VMAP_VIRT_SIZE);
+}
+
+void flush_page_to_ram(unsigned long mfn, bool sync_icache)
+{
+    void *v = map_domain_page(_mfn(mfn));
+
+    clean_and_invalidate_dcache_va_range(v, PAGE_SIZE);
+    unmap_domain_page(v);
+
+    /*
+     * For some of the instruction cache (such as VIPT), the entire I-Cache
+     * needs to be flushed to guarantee that all the aliases of a given
+     * physical address will be removed from the cache.
+     * Invalidating the I-Cache by VA highly depends on the behavior of the
+     * I-Cache (See D4.9.2 in ARM DDI 0487A.k_iss10775). Instead of using flush
+     * by VA on select platforms, we just flush the entire cache here.
+     */
+    if ( sync_icache )
+        invalidate_icache();
+}
+
+int populate_pt_range(unsigned long virt, unsigned long nr_mfns)
+{
+    return xen_pt_update(virt, INVALID_MFN, nr_mfns, _PAGE_POPULATE);
+}
+
