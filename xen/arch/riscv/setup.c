@@ -111,6 +111,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     vm_init();
 
+    dt_unflatten_host_device_tree();
+
     early_printk("All set up\n");
 
     for ( ;; )
