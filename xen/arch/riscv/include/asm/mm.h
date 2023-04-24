@@ -229,8 +229,15 @@ paddr_t __virt_to_maddr(vaddr_t va);
 /* Convert between Xen-heap virtual addresses and page-info structures. */
 static inline struct page_info *virt_to_page(const void *v)
 {
-    assert_failed("need to implememt");
-    return NULL;
+    unsigned long va = (unsigned long)v;
+    unsigned long pdx;
+
+    ASSERT(va >= XENHEAP_VIRT_START);
+    ASSERT(va < directmap_virt_end);
+
+    pdx = (va - XENHEAP_VIRT_START) >> PAGE_SHIFT;
+    pdx += mfn_to_pdx(directmap_mfn_start);
+    return frame_table + pdx - frametable_base_pdx;
 }
 
 static inline void *page_to_virt(const struct page_info *pg)
