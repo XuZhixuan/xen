@@ -7,6 +7,10 @@
 #include <asm/processor.h>
 #include <xen/lib.h>
 
+#define DT_MATCH_TIMER                      \
+    DT_MATCH_COMPATIBLE("sifive,clint0"), \
+    DT_MATCH_COMPATIBLE("riscv,clint0")
+
 typedef unsigned long cycles_t;
 
 static inline s_time_t ticks_to_ns(uint64_t ticks)
@@ -26,5 +30,7 @@ static inline cycles_t get_cycles_inline(void)
 #define get_cycles get_cycles_inline
 
 extern void force_update_vcpu_system_time(struct vcpu *v);
+
+void preinit_xen_time(void);
 
 #endif /* _ASM_RISCV_TIMEX_H */
