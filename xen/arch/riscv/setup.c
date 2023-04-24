@@ -10,6 +10,7 @@
 #include <xen/setup.h>
 #include <xen/smp.h>
 #include <xen/tasklet.h>
+#include <xen/time.h>
 #include <xen/virtual_region.h>
 #include <xen/vmap.h>
 #include <public/version.h>
@@ -115,6 +116,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     dt_unflatten_host_device_tree();
 
     tasklet_subsys_init();
+
+    preinit_xen_time();
 
     early_printk("All set up\n");
 
