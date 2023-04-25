@@ -17,6 +17,7 @@
 
 #include <asm/early_printk.h>
 #include <asm/processor.h>
+#include <asm/plic.h>
 #include <asm/traps.h>
 
 /* Xen stack for bringing up the first CPU. */
@@ -118,6 +119,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     tasklet_subsys_init();
 
     preinit_xen_time();
+
+    plic_preinit();
 
     early_printk("All set up\n");
 

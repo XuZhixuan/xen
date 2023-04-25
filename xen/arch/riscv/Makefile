@@ -11,6 +11,7 @@ obj-y += lib/
 obj-y += mm.o
 obj-y += percpu.o
 obj-y += p2m.o
+obj-y += plic.o
 obj-$(CONFIG_RISCV_64) += riscv64/
 obj-y += sbi.o
 obj-y += setup.o
