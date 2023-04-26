@@ -73,3 +73,11 @@ void __init preinit_xen_time(void)
     boot_count = get_cycles();
 }
 
+/* Set up the timer on the boot CPU (late init function) */
+int __init init_xen_time(void)
+{
+    printk("%s: need to be implemented\n", __func__);
+
+    return 0;
+}
+

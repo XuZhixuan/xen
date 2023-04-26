@@ -128,6 +128,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     console_init_preirq();
     console_init_ring();
 
+    init_xen_time();
+
     early_printk("All set up\n");
 
     for ( ;; )
