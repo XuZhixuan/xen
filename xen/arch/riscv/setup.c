@@ -12,6 +12,7 @@
 #include <xen/smp.h>
 #include <xen/tasklet.h>
 #include <xen/time.h>
+#include <xen/timer.h>
 #include <xen/virtual_region.h>
 #include <xen/vmap.h>
 #include <public/version.h>
@@ -131,6 +132,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     init_xen_time();
 
     init_timer_interrupt();
+
+    timer_init();
 
     early_printk("All set up\n");
 
