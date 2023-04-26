@@ -8,6 +8,7 @@
 #include <xen/init.h>
 #include <xen/mm.h>
 #include <xen/percpu.h>
+#include <xen/rcupdate.h>
 #include <xen/setup.h>
 #include <xen/smp.h>
 #include <xen/tasklet.h>
@@ -134,6 +135,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     init_timer_interrupt();
 
     timer_init();
+
+    rcu_init();
 
     early_printk("All set up\n");
 
