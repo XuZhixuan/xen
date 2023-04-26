@@ -21,6 +21,7 @@ obj-y += smpboot.o
 obj-y += sysctl.o
 obj-y += time.o
 obj-y += traps.o
+obj-y += uart.o
 obj-y += vm_event.o
 
 
