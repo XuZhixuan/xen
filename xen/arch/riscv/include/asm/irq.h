@@ -1,6 +1,8 @@
 #ifndef _ASM_HW_IRQ_H
 #define _ASM_HW_IRQ_H
 
+#include <xen/device_tree.h>
+
 #define NR_IRQS		1024
 
 struct arch_pirq
@@ -19,6 +21,8 @@ extern const unsigned int nr_irqs;
 #define arch_hwdom_irqs(domid) NR_IRQS
 
 #define arch_evtchn_bind_pirq(d, pirq) ((void)((d) + (pirq)))
+
+int platform_get_irq(const struct dt_device_node *device, int index);
 
 #endif /* _ASM_HW_IRQ_H */
 /*
