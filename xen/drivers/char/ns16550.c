@@ -51,7 +51,7 @@ static struct ns16550 {
     /* UART with IRQ line: interrupt-driven I/O. */
     struct irqaction irqaction;
     u8 lsr_mask;
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_RISCV)
     struct vuart_info vuart;
 #endif
     /* UART with no IRQ line: periodically-polled I/O. */
@@ -618,7 +618,7 @@ static void cf_check ns16550_stop_tx(struct serial_port *port)
         ns_write_reg(uart, UART_IER, ier & ~UART_IER_ETHREI);
 }
 
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined (CONFIG_RISCV)
 static const struct vuart_info *ns16550_vuart_info(struct serial_port *port)
 {
     struct ns16550 *uart = port->uart;
@@ -640,7 +640,7 @@ static struct uart_driver __read_mostly ns16550_driver = {
     .irq          = ns16550_irq,
     .start_tx     = ns16550_start_tx,
     .stop_tx      = ns16550_stop_tx,
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_RISCV)
     .vuart_info   = ns16550_vuart_info,
 #endif
 };
@@ -1797,11 +1797,13 @@ static int __init ns16550_uart_dt_init(struct dt_device_node *dev,
 
     uart->dw_usr_bsy = dt_device_is_compatible(dev, "snps,dw-apb-uart");
 
+#if defined (CONFIG_ARM) || defined (CONFIG_RISCV)
     uart->vuart.base_addr = uart->io_base;
     uart->vuart.size = uart->io_size;
     uart->vuart.data_off = UART_THR <<uart->reg_shift;
     uart->vuart.status_off = UART_LSR<<uart->reg_shift;
     uart->vuart.status = UART_LSR_THRE|UART_LSR_TEMT;
+#endif
 
     /* Register with generic serial driver. */
     serial_register_uart(uart - ns16550_com, &ns16550_driver, uart);
