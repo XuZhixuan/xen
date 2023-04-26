@@ -5,6 +5,7 @@
 #include <xen/compile.h>
 #include <xen/console.h>
 #include <xen/device_tree.h>
+#include <xen/domain.h>
 #include <xen/init.h>
 #include <xen/mm.h>
 #include <xen/percpu.h>
@@ -137,6 +138,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     timer_init();
 
     rcu_init();
+
+    setup_system_domains();
 
     early_printk("All set up\n");
 
