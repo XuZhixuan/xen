@@ -92,7 +92,7 @@
 #define PAGE_HYPERVISOR_RW      (_PAGE_NORMAL | _PAGE_RO | _PAGE_XN | _PAGE_W)
 
 #define PAGE_HYPERVISOR         PAGE_HYPERVISOR_RW
-// #define PAGE_HYPERVISOR_NOCACHE (_PAGE_DEVICE)
+#define PAGE_HYPERVISOR_NOCACHE (PAGE_HYPERVISOR_RW)
 // #define PAGE_HYPERVISOR_WC      (_PAGE_DEVICE)
 
 /* Invalidate all instruction caches in Inner Shareable domain to PoU */

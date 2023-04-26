@@ -1,7 +1,9 @@
 #include <xen/domain_page.h>
 #include <xen/init.h>
 #include <xen/mm.h>
+#include <xen/pfn.h>
 #include <xen/pmap.h>
+#include <xen/vmap.h>
 
 /* Limits of the Xen heap */
 mfn_t directmap_mfn_start __read_mostly = INVALID_MFN_INITIALIZER;
@@ -531,5 +533,27 @@ void flush_page_to_ram(unsigned long mfn, bool sync_icache)
 int populate_pt_range(unsigned long virt, unsigned long nr_mfns)
 {
     return xen_pt_update(virt, INVALID_MFN, nr_mfns, _PAGE_POPULATE);
+}
+
+/*
+ * This function should only be used to remap device address ranges
+ * TODO: add a check to verify this assumption
+ */
+void *ioremap_attr(paddr_t pa, size_t len, unsigned int attributes)
+{
+    mfn_t mfn = _mfn(PFN_DOWN(pa));
+    unsigned int offs = pa & (PAGE_SIZE - 1);
+    unsigned int nr = PFN_UP(offs + len);
+    void *ptr = __vmap(&mfn, nr, 1, 1, attributes, VMAP_DEFAULT);
+
+    if ( ptr == NULL )
+        return NULL;
+
+    return ptr + offs;
+}
+
+void *ioremap(paddr_t pa, size_t len)
+{
+    return ioremap_attr(pa, len, PAGE_HYPERVISOR_NOCACHE);
 }
 
