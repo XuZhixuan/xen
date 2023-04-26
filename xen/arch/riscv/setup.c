@@ -19,6 +19,7 @@
 #include <asm/processor.h>
 #include <asm/plic.h>
 #include <asm/traps.h>
+#include <asm/uart.h>
 
 /* Xen stack for bringing up the first CPU. */
 unsigned char __initdata cpu0_boot_stack[STACK_SIZE]
@@ -121,6 +122,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     preinit_xen_time();
 
     plic_preinit();
+
+    uart_init();
 
     early_printk("All set up\n");
 
