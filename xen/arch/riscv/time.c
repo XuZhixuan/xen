@@ -81,3 +81,9 @@ int __init init_xen_time(void)
     return 0;
 }
 
+/* Set up the timer interrupt on this CPU */
+void init_timer_interrupt(void)
+{
+    printk("%s: need to be implemented\n", __func__);
+}
+

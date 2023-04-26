@@ -130,6 +130,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     init_xen_time();
 
+    init_timer_interrupt();
+
     early_printk("All set up\n");
 
     for ( ;; )

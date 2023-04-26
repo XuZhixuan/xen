@@ -33,4 +33,7 @@ extern void force_update_vcpu_system_time(struct vcpu *v);
 
 void preinit_xen_time(void);
 
+/* Set up the timer interrupt on this CPU */
+void init_timer_interrupt(void);
+
 #endif /* _ASM_RISCV_TIMEX_H */
