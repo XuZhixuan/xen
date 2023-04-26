@@ -22,6 +22,7 @@
 #include <asm/early_printk.h>
 #include <asm/processor.h>
 #include <asm/plic.h>
+#include <asm/system.h>
 #include <asm/traps.h>
 #include <asm/uart.h>
 
@@ -140,6 +141,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     rcu_init();
 
     setup_system_domains();
+
+    local_irq_enable();
 
     early_printk("All set up\n");
 
