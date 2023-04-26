@@ -3,6 +3,7 @@
 #include <xen/bootfdt.h>
 #include <xen/bug.h>
 #include <xen/compile.h>
+#include <xen/console.h>
 #include <xen/device_tree.h>
 #include <xen/init.h>
 #include <xen/mm.h>
@@ -124,6 +125,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     plic_preinit();
 
     uart_init();
+    console_init_preirq();
+    console_init_ring();
 
     early_printk("All set up\n");
 
