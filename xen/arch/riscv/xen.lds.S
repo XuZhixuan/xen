@@ -163,6 +163,14 @@ SECTIONS
         . = ALIGN(POINTER_ALIGN);
         __bss_end = .;
     } :text
+
+    . = ALIGN(POINTER_ALIGN);
+    .dev.info : {
+      _sdevice = .;
+      *(.dev.info)
+      _edevice = .;
+    } :text
+
     _end = . ;
 
     /* Section for the device tree blob (if any). */

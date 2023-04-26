@@ -1,4 +1,5 @@
 obj-y += delay.o
+obj-y += device.o
 obj-y += domain.o
 obj-y += domctl.o
 obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
