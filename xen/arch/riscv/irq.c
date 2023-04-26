@@ -50,6 +50,13 @@ void arch_move_irqs(struct vcpu *v)
     printk("%s: need to be implemented", __func__);
 }
 
+int setup_irq(unsigned int irq, unsigned int irqflags, struct irqaction *new)
+{
+    assert_failed(__func__);
+
+    return -ENOSYS;
+}
+
 int platform_get_irq(const struct dt_device_node *device, int index)
 {
     struct dt_irq dt_irq;
