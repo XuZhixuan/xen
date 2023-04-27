@@ -23,6 +23,7 @@ obj-y += time.o
 obj-y += traps.o
 obj-y += uart.o
 obj-y += vm_event.o
+obj-y += vtimer.o
 
 
 $(TARGET): $(TARGET)-syms

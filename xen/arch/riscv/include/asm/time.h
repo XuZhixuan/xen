@@ -36,4 +36,6 @@ void preinit_xen_time(void);
 /* Set up the timer interrupt on this CPU */
 void init_timer_interrupt(void);
 
+extern uint64_t boot_count;
+
 #endif /* _ASM_RISCV_TIMEX_H */

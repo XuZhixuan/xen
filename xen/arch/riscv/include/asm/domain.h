@@ -3,6 +3,8 @@
 
 #ifndef __ASSEMBLY__
 
+#include <xen/timer.h>
+
 #include <public/hvm/params.h>
 
 struct hvm_domain
@@ -14,6 +16,8 @@ struct hvm_domain
 #define is_domain_direct_mapped(d) ((d) == hardware_domain)
 
 struct vtimer {
+    struct vcpu *v;
+    struct timer timer;
 };
 
 struct arch_domain
