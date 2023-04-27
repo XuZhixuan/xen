@@ -23,6 +23,7 @@ obj-y += time.o
 obj-y += traps.o
 obj-y += uart.o
 obj-y += vm_event.o
+obj-y += vplic.o
 obj-y += vtimer.o
 
 
