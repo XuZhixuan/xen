@@ -107,12 +107,15 @@ static inline void free_vcpu_guest_context(struct vcpu_guest_context *vgc)
 
 static inline void arch_vcpu_block(struct vcpu *v) {}
 
-#endif /* !__ASSEMBLY__ */
-
 struct guest_memory_policy {};
 static inline void update_guest_memory_policy(struct vcpu *v,
                                               struct guest_memory_policy *gmp)
 {}
+
+#endif /* !__ASSEMBLY__ */
+
+#define VCPU_SAVED_CONTEXT_OFFSET(x)   \
+    (VCPU_ARCH_SAVED_CONTEXT + VCPU_SAVED_CONTEXT_##x)
 
 #endif /* __ASM_DOMAIN_H__ */
 

@@ -92,3 +92,30 @@ restore_registers:
         REG_L   sp, CPU_USER_REGS_SP(sp)
 
         sret
+
+/* t0 is used as a temporary reg and is clobbered to oblivion */
+ENTRY(return_to_new_vcpu64)
+        jal     leave_hypervisor_to_guest
+
+        /* Store stack pointer to tp->vcpu->arch.guest_cpu_user_regs.sp */
+        REG_S   sp, PCPU_INFO_GUEST_CPU_INFO(tp)
+
+        /* Backup tp into sscratch */
+        csrrw    tp, CSR_SSCRATCH, tp
+
+        /* Set vCPU registers */
+        REG_L   t0, CPU_USER_REGS_SEPC(sp)
+        csrw    sepc, t0
+
+        /* Hartid goes to a0 */
+        REG_L   a0, CPU_USER_REGS_A0(sp)
+
+        /* DTB goes to a1 */
+        REG_L   a1, CPU_USER_REGS_A1(sp)
+
+        /* Set guest mode to supervisor */
+        li      t0, SSTATUS_SPP
+        csrs    CSR_SSTATUS, t0
+
+        /* Enter guest */
+        sret
