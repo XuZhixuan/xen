@@ -20,6 +20,7 @@
 #include <xen/vmap.h>
 #include <public/version.h>
 
+#include <asm/current.h>
 #include <asm/early_printk.h>
 #include <asm/processor.h>
 #include <asm/plic.h>
@@ -147,6 +148,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
    /* Init idle domain */
     scheduler_init();
+    set_current(idle_vcpu[0]);
 
     early_printk("All set up\n");
 

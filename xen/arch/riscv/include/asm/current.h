@@ -19,8 +19,9 @@ struct vcpu;
 /* Which VCPU is "current" on this PCPU. */
 DECLARE_PER_CPU(struct vcpu *, curr_vcpu);
 
-#define current            (this_cpu(curr_vcpu))
-#define get_cpu_current(cpu)  (per_cpu(curr_vcpu, cpu))
+#define current              (this_cpu(curr_vcpu))
+#define set_current(vcpu)    do { current = (vcpu); } while (0)
+#define get_cpu_current(cpu) (per_cpu(curr_vcpu, cpu))
 
 /* Per-VCPU state that lives at the top of the stack */
 struct cpu_info {
