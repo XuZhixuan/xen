@@ -5,6 +5,8 @@
 
 #include <xen/timer.h>
 
+#include <asm/p2m.h>
+
 #include <public/hvm/params.h>
 
 struct hvm_domain
@@ -22,6 +24,8 @@ struct vtimer {
 
 struct arch_domain
 {
+    struct p2m_domain p2m;
+
     struct hvm_domain hvm;
 
 }  __cacheline_aligned;

@@ -2,6 +2,7 @@
 #define _XEN_P2M_H
 
 #include <xen/mm.h>
+#include <xen/rwlock.h>
 
 #include <asm/page-bits.h>
 
@@ -13,6 +14,19 @@ extern void memory_type_changed(struct domain *);
 
 /* Per-p2m-table state */
 struct p2m_domain {
+    /*
+     * Lock that protects updates to the p2m.
+     */
+    rwlock_t lock;
+
+    /* Page containing root p2m table */
+    struct page_info *root;
+
+    /* Pages used to construct the p2m */
+    struct page_list_head pages;
+
+    /* Address Translation Table for the p2m */
+    uint64_t hgatp;
 };
 
 /*
@@ -88,6 +102,22 @@ static inline bool arch_acquire_resource_check(struct domain *d)
     BUG(); /* unimplemented */
     return true;
 }
+
+static inline void p2m_write_lock(struct p2m_domain *p2m)
+{
+    write_lock(&p2m->lock);
+}
+
+static inline void p2m_write_unlock(struct p2m_domain *p2m)
+{
+    write_unlock(&p2m->lock);
+}
+
+/* get host p2m table */
+#define p2m_get_hostp2m(d) (&(d)->arch.p2m)
+
+/* Init the datastructures for later use by the p2m code */
+int p2m_init(struct domain *d);
 
 #endif /* _XEN_P2M_H */
 
