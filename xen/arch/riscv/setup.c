@@ -10,6 +10,7 @@
 #include <xen/mm.h>
 #include <xen/percpu.h>
 #include <xen/rcupdate.h>
+#include <xen/sched.h>
 #include <xen/setup.h>
 #include <xen/smp.h>
 #include <xen/tasklet.h>
@@ -143,6 +144,9 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     setup_system_domains();
 
     local_irq_enable();
+
+   /* Init idle domain */
+    scheduler_init();
 
     early_printk("All set up\n");
 
