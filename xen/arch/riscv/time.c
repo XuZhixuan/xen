@@ -24,7 +24,7 @@ s_time_t get_s_time(void)
 /* VCPU PV timers. */
 void send_timer_event(struct vcpu *v)
 {
-    assert_failed("need to be implemented");
+    v->arch.hvip |= MIP_VSTIP;
 }
 
 void force_update_vcpu_system_time(struct vcpu *v)
