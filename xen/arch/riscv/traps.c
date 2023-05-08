@@ -14,7 +14,9 @@
 #include <asm/csr.h>
 #include <asm/early_printk.h>
 #include <asm/processor.h>
+#include <asm/sbi.h>
 #include <asm/traps.h>
+#include <asm/vtimer.h>
 
 #define cast_to_bug_frame(addr) \
     (const struct bug_frame *)(addr)
@@ -400,6 +402,155 @@ void timer_interrupt(unsigned long cause, struct cpu_user_regs *regs)
     raise_softirq(TIMER_SOFTIRQ);
 }
 
+static void guest_sbi_set_timer(struct cpu_user_regs *regs)
+{
+    struct vcpu *v = current;
+    vtimer_set_timer(&v->arch.vtimer, regs->a0);
+    regs->a0 = 0;
+}
+
+static void guest_sbi_putchar(struct cpu_user_regs *regs)
+{
+    sbi_console_putchar((int)regs->a0);
+    regs->a0 = 0;
+}
+
+static void guest_sbi_getchar(struct cpu_user_regs *regs)
+{
+    regs->a0 = sbi_console_getchar();
+}
+
+static void guest_sbi_ext_base(struct cpu_user_regs *regs)
+{
+    unsigned long fid = regs->a6;
+
+    switch (fid)
+    {
+    case SBI_EXT_BASE_GET_SPEC_VERSION:
+        regs->a0 = 0;
+        regs->a1 = sbi_spec_version;
+        break;
+    case SBI_EXT_BASE_GET_IMP_ID:
+        regs->a0 = 0;
+        regs->a1 = sbi_fw_id;
+        break;
+    case SBI_EXT_BASE_GET_IMP_VERSION:
+        regs->a0 = 0;
+        regs->a1 = sbi_fw_version;
+        break;
+    case SBI_EXT_BASE_PROBE_EXT:
+        regs->a1 = sbi_probe_extension(regs->a0);
+        regs->a0 = 0;
+        break;
+
+    default:
+        printk("%s: Unsupport FID #%ld\n", __func__, fid);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    }
+}
+
+// static inline void riscv_cpuid_to_hartid_mask(const struct cpumask *in,
+// 					      struct cpumask *out)
+// {
+// 	cpumask_clear(out);
+// 	cpumask_set_cpu(0, out);
+// }
+
+static void guest_sbi_rfence(struct cpu_user_regs *regs)
+{
+    unsigned long fid = regs->a6;
+
+    switch (fid)
+    {
+    case SBI_EXT_RFENCE_REMOTE_FENCE_I:
+        {
+            printk("SBI_EXT_RFENCE_REMOTE_FENCE_I is unsupported\n");
+
+            regs->a0 = SBI_ERR_NOT_SUPPORTED;
+            break;
+        }
+    case SBI_EXT_RFENCE_REMOTE_SFENCE_VMA:
+        {
+            printk("SBI_EXT_RFENCE_REMOTE_SFENCE_VMA is unsupported\n");
+
+            regs->a0 = SBI_ERR_NOT_SUPPORTED;
+            break;
+        }
+
+    default:
+        printk("%s: Unsupport FID #%ld\n", __func__, fid);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    }
+}
+
+static inline void advance_pc(struct cpu_user_regs *regs)
+{
+    regs->sepc += 4;
+}
+
+static void handle_guest_sbi(struct cpu_user_regs *regs)
+{
+    unsigned long eid = regs->a7;
+
+    switch ( eid )
+    {
+    case SBI_EXT_TIME:
+    case SBI_EXT_0_1_SET_TIMER:
+        guest_sbi_set_timer(regs);
+        break;
+    case SBI_EXT_0_1_CONSOLE_PUTCHAR:
+        guest_sbi_putchar(regs);
+        break;
+    case SBI_EXT_0_1_CONSOLE_GETCHAR:
+        guest_sbi_getchar(regs);
+        break;
+    case SBI_EXT_0_1_CLEAR_IPI:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_CLEAR_IPI\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_0_1_SEND_IPI:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_SEND_IPI\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_0_1_SHUTDOWN:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_SHUTDOWN\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_0_1_REMOTE_FENCE_I:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_FENCE_I\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_0_1_REMOTE_SFENCE_VMA:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_SFENCE_VMA\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID:
+        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID\n",
+               __FILE__, __LINE__);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    case SBI_EXT_BASE:
+        guest_sbi_ext_base(regs);
+        break;
+    case SBI_EXT_RFENCE:
+        guest_sbi_rfence(regs);
+        break;
+    default:
+        printk("UNKNOWN Guest SBI extension id 0x%lx, FID #%lu\n", eid, regs->a1);
+        regs->a0 = SBI_ERR_NOT_SUPPORTED;
+        break;
+    };
+
+    advance_pc(regs);
+}
+
 void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
@@ -435,7 +586,15 @@ void do_trap(struct cpu_user_regs *cpu_regs)
             break;
         }
     } else {
-        dump_csrs(cause);
+        switch ( cause )
+        {
+        case CAUSE_VIRTUAL_SUPERVISOR_ECALL:
+            handle_guest_sbi(cpu_regs);
+            break;
+        default:
+            dump_csrs(cause);
+            break;
+        }
     }
 
     if ( trap_from_guest )
