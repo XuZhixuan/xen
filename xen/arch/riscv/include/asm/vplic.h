@@ -16,4 +16,7 @@ struct vplic {
 
 struct vplic *vplic_alloc(void);
 
+struct  vcpu;
+int vplic_emulate_load(struct vcpu *vcpu, unsigned long addr, void *out, int out_len);
+
 #endif /* __ASM_VPLIC_H__ */
