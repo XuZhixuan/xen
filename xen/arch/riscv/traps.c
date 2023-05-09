@@ -13,9 +13,12 @@
 
 #include <asm/csr.h>
 #include <asm/early_printk.h>
+#include <asm/guest_access.h>
 #include <asm/processor.h>
 #include <asm/sbi.h>
+#include <asm/setup.h>
 #include <asm/traps.h>
+#include <asm/vplic.h>
 #include <asm/vtimer.h>
 
 #define cast_to_bug_frame(addr) \
@@ -551,6 +554,166 @@ static void handle_guest_sbi(struct cpu_user_regs *regs)
     advance_pc(regs);
 }
 
+static inline unsigned long get_faulting_gpa(void)
+{
+    return (csr_read(CSR_HTVAL) << 2) | (csr_read(CSR_STVAL) & 0x3);
+}
+
+static bool is_plic_access(unsigned long addr)
+{
+    return PLIC_BASE < addr && addr < PLIC_END;
+}
+
+static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
+                        unsigned long htinst)
+{
+    uint8_t data8;
+    uint16_t data16;
+    uint32_t data32;
+    uint64_t data64;
+    int rc;
+	unsigned long insn;
+	int shift = 0, len = 0, insn_len = 0;
+	struct riscv_trap utrap = { 0 };
+
+	/* Determine trapped instruction */
+	if (htinst & 0x1) {
+		/*
+		 * Bit[0] == 1 implies trapped instruction value is
+		 * transformed instruction or custom instruction.
+		 */
+		insn = htinst | INSN_16BIT_MASK;
+		insn_len = (htinst & BIT(1, UL)) ? INSN_LEN(insn) : 2;
+	} else {
+		/*
+		 * Bit[0] == 0 implies trapped instruction value is
+		 * zero or special value.
+		 */
+		insn = riscv_vcpu_unpriv_read(vcpu, true, guest_regs(vcpu)->sepc,
+                                      &utrap);
+		if (utrap.scause) {
+			/* Redirect trap if we failed to read instruction */
+			utrap.sepc = guest_regs(vcpu)->sepc;
+            printk("TODO: we failed to read the trapped insns, "
+                   "so redirect trap to guest\n");
+			return 1;
+		}
+		insn_len = INSN_LEN(insn);
+	}
+
+	/* Decode length of MMIO and shift */
+	if ((insn & INSN_MASK_LW) == INSN_MATCH_LW) {
+		len = 4;
+		shift = 8 * (sizeof(unsigned long) - len);
+	} else if ((insn & INSN_MASK_LB) == INSN_MATCH_LB) {
+		len = 1;
+		shift = 8 * (sizeof(unsigned long) - len);
+	} else if ((insn & INSN_MASK_LBU) == INSN_MATCH_LBU) {
+		len = 1;
+		shift = 8 * (sizeof(unsigned long) - len);
+#ifdef CONFIG_64BIT
+	} else if ((insn & INSN_MASK_LD) == INSN_MATCH_LD) {
+		len = 8;
+		shift = 8 * (sizeof(unsigned long) - len);
+	} else if ((insn & INSN_MASK_LWU) == INSN_MATCH_LWU) {
+		len = 4;
+#endif
+	} else if ((insn & INSN_MASK_LH) == INSN_MATCH_LH) {
+		len = 2;
+		shift = 8 * (sizeof(unsigned long) - len);
+	} else if ((insn & INSN_MASK_LHU) == INSN_MATCH_LHU) {
+		len = 2;
+#ifdef CONFIG_64BIT
+	} else if ((insn & INSN_MASK_C_LD) == INSN_MATCH_C_LD) {
+		len = 8;
+		shift = 8 * (sizeof(unsigned long) - len);
+		insn = RVC_RS2S(insn) << SH_RD;
+	} else if ((insn & INSN_MASK_C_LDSP) == INSN_MATCH_C_LDSP &&
+		   ((insn >> SH_RD) & 0x1f)) {
+		len = 8;
+		shift = 8 * (sizeof(unsigned long) - len);
+#endif
+	} else if ((insn & INSN_MASK_C_LW) == INSN_MATCH_C_LW) {
+		len = 4;
+		shift = 8 * (sizeof(unsigned long) - len);
+		insn = RVC_RS2S(insn) << SH_RD;
+	} else if ((insn & INSN_MASK_C_LWSP) == INSN_MATCH_C_LWSP &&
+		   ((insn >> SH_RD) & 0x1f)) {
+		len = 4;
+		shift = 8 * (sizeof(unsigned long) - len);
+	} else {
+		return -EOPNOTSUPP;
+	}
+
+	/* Fault address should be aligned to length of MMIO */
+	if (fault_addr & (len - 1))
+		return -EIO;
+
+    printk("emulating load: pc=0x%02lx, addr=0x%02lx, len=%d, shift=%d\n",
+            guest_regs(vcpu)->sepc, fault_addr, len, shift);
+
+    if ( is_plic_access(fault_addr) )
+    {
+        switch ( len )
+        {
+        case 1:
+            rc = vplic_emulate_load(current, fault_addr, &data8, len);
+            if ( rc < 0 )
+                return rc;
+            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data8 << shift) >> shift);
+            break;
+        case 2:
+            rc = vplic_emulate_load(current, fault_addr, &data16, len);
+            if ( rc < 0 )
+                return rc;
+            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data16 << shift) >> shift);
+            break;
+        case 4:
+            rc = vplic_emulate_load(current, fault_addr, &data32, len);
+            if ( rc < 0 )
+                return rc;
+            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data32 << shift) >> shift);
+            break;
+        case 8:
+            rc = vplic_emulate_load(current, fault_addr, &data64, len);
+            if ( rc < 0 )
+                return rc;
+            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data64 << shift) >> shift);
+            break;
+        default:
+            BUG();
+        }
+    }
+
+    advance_pc(guest_regs(vcpu));
+
+    return 0;
+}
+
+static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *regs)
+{
+    unsigned long addr;
+
+    BUG_ON(cause != CAUSE_LOAD_GUEST_PAGE_FAULT && cause != CAUSE_STORE_GUEST_PAGE_FAULT);
+
+    addr = get_faulting_gpa();
+
+    printk("%s: TODO: handle faulted guest IO %s @ addr 0x%02lx\n",
+            __func__,
+            (cause == CAUSE_LOAD_GUEST_PAGE_FAULT) ? "load" : "store",
+            addr);
+
+    if ( cause == CAUSE_LOAD_GUEST_PAGE_FAULT )
+    {
+        emulate_load(current, get_faulting_gpa(), csr_read(CSR_HTINST));
+    }
+    else if ( cause == CAUSE_STORE_GUEST_PAGE_FAULT )
+    {
+        printk("TODO: emulate_store()\n");
+        advance_pc(regs);
+    }
+}
+
 void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
@@ -590,6 +753,10 @@ void do_trap(struct cpu_user_regs *cpu_regs)
         {
         case CAUSE_VIRTUAL_SUPERVISOR_ECALL:
             handle_guest_sbi(cpu_regs);
+            break;
+        case CAUSE_LOAD_GUEST_PAGE_FAULT:
+        case CAUSE_STORE_GUEST_PAGE_FAULT:
+            handle_guest_page_fault(cause, cpu_regs);
             break;
         default:
             dump_csrs(cause);

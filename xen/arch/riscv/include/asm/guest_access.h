@@ -3,6 +3,9 @@
 
 /* common/symbol.c complain with this header: it should moved there */
 #include <xen/errno.h>
+#include <xen/sched.h>
+
+#include <asm/traps.h>
 
 unsigned long raw_copy_to_guest(void *to, const void *from, unsigned len);
 unsigned long raw_copy_from_guest(void *to, const void *from, unsigned len);
@@ -18,6 +21,11 @@ unsigned long copy_to_guest_phys(struct domain *d,
                                  paddr_t gpa,
                                  void *buf,
                                  unsigned int len);
+
+unsigned long riscv_vcpu_unpriv_read(struct vcpu *vcpu,
+					 bool read_insn,
+					 unsigned long guest_addr,
+					 struct riscv_trap *trap);
 
 #endif /* __ASM_RISCV_GUEST_ACCESS_H__ */
 /*
