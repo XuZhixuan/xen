@@ -298,6 +298,13 @@ void setup_fixmap_mappings(void);
 
 paddr_t pt_walk(unsigned long root, vaddr_t va, bool is_xen);
 
+void __iomem *ioremap_attr(paddr_t start, size_t len, unsigned attributes);
+
+static inline void __iomem *ioremap_cache(paddr_t start, size_t len)
+{
+    return ioremap_attr(start, len, PAGE_HYPERVISOR);
+}
+
 int pt_update(vaddr_t root, vaddr_t va, paddr_t pa,
               bool use_xenheap, struct domain *d, unsigned long flags);
 
