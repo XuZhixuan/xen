@@ -152,6 +152,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     do_initcalls();
 
+    create_dom0();
+
     early_printk("All set up\n");
 
     for ( ;; )
