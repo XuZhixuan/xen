@@ -12,8 +12,9 @@
 /* Fixmap slots */
 #define FIXMAP_PMAP_BEGIN (0) /* Start of PMAP */
 #define FIXMAP_PMAP_END (FIXMAP_PMAP_BEGIN + NUM_FIX_PMAP - 1) /* End of PMAP */
+#define FIXMAP_MISC (FIXMAP_PMAP_END + 1)  /* Ephemeral mappings of hardware */
 
-#define FIXMAP_LAST FIXMAP_PMAP_END
+#define FIXMAP_LAST FIXMAP_MISC
 
 #define FIXADDR_START FIXMAP_ADDR(0)
 #define FIXADDR_TOP FIXMAP_ADDR(FIXMAP_LAST)
