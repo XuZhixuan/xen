@@ -77,8 +77,7 @@ static inline int guest_physmap_add_page(struct domain *d,
                                          mfn_t mfn,
                                          unsigned int page_order)
 {
-    BUG();
-    return 0;
+    return guest_physmap_add_entry(d, gfn, mfn, page_order, p2m_ram_rw);
 }
 
 mfn_t gfn_to_mfn(struct domain *d, gfn_t gfn);
@@ -98,14 +97,14 @@ static inline int get_page_and_type(struct page_info *page,
                                     struct domain *domain,
                                     unsigned long type)
 {
-    BUG();
+    assert_failed(__func__);
 
     return 0;
 }
 
 static inline bool arch_acquire_resource_check(struct domain *d)
 {
-    BUG(); /* unimplemented */
+    assert_failed(__func__); /* unimplemented */
     return true;
 }
 
