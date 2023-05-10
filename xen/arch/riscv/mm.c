@@ -3,6 +3,7 @@
 #include <xen/cache.h>
 #include <xen/compiler.h>
 #include <xen/domain_page.h>
+#include <xen/err.h>
 #include <xen/init.h>
 #include <xen/kernel.h>
 #include <xen/pfn.h>
@@ -11,6 +12,7 @@
 #include <xen/mm.h>
 #include <xen/page-size.h>
 #include <xen/pmap.h>
+#include <xen/sched.h>
 #include <asm/early_printk.h>
 
 #include <asm/early_printk.h>
@@ -18,6 +20,18 @@
 #include <asm/current.h>
 #include <asm/page.h>
 #include <asm/processor.h>
+#include <asm/p2m.h>
+
+enum pt_level {
+    pt_level_zero,
+    pt_level_one,
+    pt_level_two,
+    pt_level_three,
+    pt_level_four,
+#if CONFIG_PAGING_LEVELS > 5
+    #error "need to update enum pt_level"
+#endif
+};
 
 struct mmu_desc {
     unsigned int num_levels;
@@ -574,7 +588,170 @@ void unmap_domain_table(pte_t *table)
     return unmap_domain_page(table);
 }
 
-/* Returns a virtual to physical address mapping.
+static void clean_page_info(struct page_info *page)
+{
+    void *p = __map_domain_page(page);
+
+    clear_page(p);
+    unmap_domain_page(p);
+}
+
+/* Creates a table using the correct allocator */
+static int create_table(pte_t *pte, bool use_xenheap, struct domain *d)
+{
+    pte_t new;
+    paddr_t phys_addr;
+
+    BUG_ON( !d && !use_xenheap );
+    BUG_ON( SYS_STATE_boot <= SYS_STATE_early_boot );
+    BUG_ON( !pte );
+
+    if ( !pte )
+        return -EINVAL;
+
+    if ( use_xenheap )
+    {
+        void *new_table = alloc_xenheap_page();
+
+        if ( !new_table )
+            return -ENOMEM;
+
+        clear_page(new_table);
+        phys_addr = virt_to_maddr(new_table);
+    }
+    else
+    {
+        struct page_info *page = alloc_domheap_pages(NULL, 1, 0);
+
+        if ( !page )
+            return -ENOMEM;
+
+        page_list_add(page, &p2m_get_hostp2m(d)->pages);
+        clean_page_info(page);
+        phys_addr = page_to_maddr(page);
+    }
+
+    BUG_ON( !phys_addr );
+
+    new = paddr_to_pte(phys_addr, 0x00);
+    new.pte |= PTE_TABLE;
+    write_pte(pte, new);
+
+    return 0;
+}
+
+
+/*
+ * Returns the page table pointed to by entry in table, indexed by va.
+ *
+ * table: the current page table
+ * va: the virtual address to be mapped from
+ * current_level: the level of arg table (l2, l1, l0 for sv39)
+ * use_xenheap: use the xen heap if yes, otherwise yes
+ *              the dom heap for allocating new tables
+ * d: the domain the page table is for
+ *
+ * d is not used if uxe_xenheap == true.
+ *
+ * The table returned is mapped in (by map_domain_page if !use_xenheap, or
+ * automatically if from xenheap), therefore if !use_xenheap, then the caller
+ * must unmap the table using unmap_domain_page() after use.
+ *
+ * Returns the virtual address to the table.
+ */
+static pte_t *pt_next_level(pte_t *table, vaddr_t va, enum pt_level current_level,
+                            bool use_xenheap, struct domain *d)
+{
+    pte_t *pte;
+    unsigned long index;
+    int rc;
+
+    BUG_ON( SYS_STATE_boot <= SYS_STATE_early_boot );
+
+    switch ( current_level )
+    {
+        case pt_level_zero:
+            BUG();
+            break;
+        default:
+            index = pt_index(current_level, va);
+    }
+
+    pte = &table[index];
+
+    if ( pte_is_superpage(*pte, current_level) )
+    {
+        printk(XENLOG_ERR "Breaking up super pages not supported\n");
+        return ERR_PTR(-EOPNOTSUPP);
+    }
+
+    if ( !pte_is_table(*pte, current_level) && current_level != pt_level_zero )
+    {
+        rc = create_table(pte, use_xenheap, d);
+
+        if ( rc )
+            return ERR_PTR(rc);
+    }
+
+    if ( use_xenheap )
+        return (pte_t*)maddr_to_virt(pte_to_paddr(*pte));
+
+    return (pte_t*)map_domain_page(maddr_to_mfn(pte_to_paddr(*pte)));
+}
+
+/*
+ * Updates the page tables found at root with a mapping
+ * from va to pa.
+ *
+ * root: the virtual address of the top level page table
+ * va: the virtual address to be mapped from
+ * pa: the physical address to be mapped to
+ * use_xenheap: use the xen heap if yes, otherwise yes
+ *              the dom heap for allocating new tables
+ * d: the domain the page table is for
+ *
+ * d is not used if uxe_xenheap == true.
+ *
+ * Returns 0 on success, otherwise returns negative errno.
+ */
+int pt_update(vaddr_t root, vaddr_t va, paddr_t pa,
+              bool use_xenheap, struct domain *d, unsigned long flags)
+{
+    pte_t *l2, *l1, *l0, new;
+
+    BUG_ON( !root );
+    BUG_ON( SYS_STATE_boot <= SYS_STATE_early_boot );
+    BUILD_BUG_ON( CONFIG_PAGING_LEVELS != 3 );
+
+    /* Level 2 */
+    l2 = (pte_t*)root;
+    l1 = pt_next_level(l2, va, pt_level_two, use_xenheap, d);
+
+    if ( IS_ERR(l1) )
+        return PTR_ERR(l1);
+
+    /* Level 1 */
+    l0 = pt_next_level(l1, va, pt_level_one, use_xenheap, d);
+
+    if ( IS_ERR(l0) )
+        return PTR_ERR(l0);
+
+    /* Level 0 */
+    new = paddr_to_pte(pa, 0x00);
+    new.pte |= PTE_VALID | flags;
+    write_pte(&l0[pt_index(0, va)], new);
+
+    if ( !use_xenheap )
+    {
+        unmap_domain_page(l1);
+        unmap_domain_page(l0);
+    }
+
+    return 0;
+}
+
+/*
+ * Returns a virtual to physical address mapping.
  *
  * root:   virtual address of the page table
  * va:     the virtual address

@@ -298,6 +298,9 @@ void setup_fixmap_mappings(void);
 
 paddr_t pt_walk(unsigned long root, vaddr_t va, bool is_xen);
 
+int pt_update(vaddr_t root, vaddr_t va, paddr_t pa,
+              bool use_xenheap, struct domain *d, unsigned long flags);
+
 #endif /* _ASM_RISCV_MM_H */
 /*
  * Local variables:
