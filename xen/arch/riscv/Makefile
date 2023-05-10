@@ -7,6 +7,7 @@ obj-y += efi/
 obj-y += entry.o
 obj-y += guestcopy.o
 obj-y += irq.o
+obj-y += kernel.o
 obj-y += lib/
 obj-y += mm.o
 obj-y += percpu.o
