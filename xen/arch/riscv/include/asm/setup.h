@@ -12,6 +12,8 @@ extern domid_t max_init_domid;
 #define PLIC_SIZE  0x0210000
 #define PLIC_END (PLIC_BASE + PLIC_SIZE)
 
+void create_dom0(void);
+
 #endif /* __RISCV_SETUP_H_ */
 /*
  * Local variables:
