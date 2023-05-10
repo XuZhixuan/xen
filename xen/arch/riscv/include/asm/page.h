@@ -93,7 +93,7 @@
 
 #define PAGE_HYPERVISOR         PAGE_HYPERVISOR_RW
 #define PAGE_HYPERVISOR_NOCACHE (PAGE_HYPERVISOR_RW)
-// #define PAGE_HYPERVISOR_WC      (_PAGE_DEVICE)
+#define PAGE_HYPERVISOR_WC      (PAGE_HYPERVISOR_RW)
 
 /* Invalidate all instruction caches in Inner Shareable domain to PoU */
 static inline void invalidate_icache(void)
