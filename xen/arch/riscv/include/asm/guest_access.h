@@ -13,6 +13,12 @@ unsigned long raw_copy_from_guest(void *to, const void *from, unsigned len);
 #define guest_handle_okay(hnd, nr) (1)
 #define guest_handle_subrange_okay(hnd, first, last) (1)
 
+struct domain;
+unsigned long copy_to_guest_phys(struct domain *d,
+                                 paddr_t gpa,
+                                 void *buf,
+                                 unsigned int len);
+
 #endif /* __ASM_RISCV_GUEST_ACCESS_H__ */
 /*
  * Local variables:
