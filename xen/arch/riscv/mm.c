@@ -562,3 +562,83 @@ inline void flush_xen_tlb_range_va(vaddr_t va,
 
     asm volatile("sfence.vma");
 }
+
+/*
+ * Map the table that pte points to.
+ */
+void *map_xen_table(pte_t *pte)
+{
+    return (pte_t*)maddr_to_virt(pte_to_paddr(*pte));
+}
+
+/*
+ * Map the table that pte points to.
+ */
+void *map_domain_table(pte_t *pte)
+{
+    return map_domain_page(maddr_to_mfn((paddr_t)pte_to_paddr(*pte)));
+}
+
+void unmap_domain_table(pte_t *table)
+{
+    return unmap_domain_page(table);
+}
+
+/* Returns a virtual to physical address mapping.
+ *
+ * root:   virtual address of the page table
+ * va:     the virtual address
+ * is_xen: set to true if the tables are off the xen heap, otherwise false.
+ */
+paddr_t pt_walk(vaddr_t root, vaddr_t va, bool is_xen)
+{
+    paddr_t pa;
+    pte_t *second, *first, *zeroeth;
+    unsigned long index0, index1, index2;
+
+    BUILD_BUG_ON(CONFIG_PAGING_LEVELS != 3);
+
+    /* TODO: make the func more generic */
+
+    second = (pte_t*)root;
+    index2 = pt_index(2, va);
+
+    if ( !pte_is_valid(second[index2]) || !pte_is_table(second[index2], 2) )
+    {
+        pa = 0;
+        goto out;
+    }
+
+    first = &second[index2];
+    first = is_xen ? map_xen_table(first) : map_domain_table(first);
+
+    index1 = pt_index(1, va);
+
+    if ( !pte_is_valid(first[index1]) || !pte_is_table(first[index1], 1) )
+    {
+        pa = 0;
+        goto out;
+    }
+
+    zeroeth = &first[index1];
+    zeroeth = is_xen ? map_xen_table(zeroeth) : map_domain_table(zeroeth);
+
+    index0 = pt_index(0, va);
+
+    if ( !pte_is_valid(zeroeth[index0]) )
+    {
+        pa = 0;
+        goto out;
+    }
+
+    pa = pte_to_paddr(zeroeth[index0]) | (va & (PAGE_SIZE - 1));
+
+out:
+    if ( !is_xen ) {
+        unmap_domain_table(second);
+        unmap_domain_table(first);
+        unmap_domain_table(zeroeth);
+    }
+    return pa;
+}
+

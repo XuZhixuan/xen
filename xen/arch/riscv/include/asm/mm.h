@@ -296,6 +296,8 @@ void* early_fdt_map(paddr_t fdt_paddr);
 
 void setup_fixmap_mappings(void);
 
+paddr_t pt_walk(unsigned long root, vaddr_t va, bool is_xen);
+
 #endif /* _ASM_RISCV_MM_H */
 /*
  * Local variables:
