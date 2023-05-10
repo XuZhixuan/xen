@@ -113,11 +113,27 @@ static inline void p2m_write_unlock(struct p2m_domain *p2m)
     write_unlock(&p2m->lock);
 }
 
+static inline void p2m_read_lock(struct p2m_domain *p2m)
+{
+    read_lock(&p2m->lock);
+}
+
+static inline void p2m_read_unlock(struct p2m_domain *p2m)
+{
+    read_unlock(&p2m->lock);
+}
+
 /* get host p2m table */
 #define p2m_get_hostp2m(d) (&(d)->arch.p2m)
 
 /* Init the datastructures for later use by the p2m code */
 int p2m_init(struct domain *d);
+
+struct page_info *p2m_get_page_from_gfn(struct domain *d, gfn_t gfn,
+                                        p2m_type_t *t);
+
+/* Look up the MFN corresponding to a domain's GFN. */
+mfn_t p2m_lookup(struct domain *d, gfn_t gfn, p2m_type_t *t);
 
 #endif /* _XEN_P2M_H */
 

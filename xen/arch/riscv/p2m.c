@@ -4,6 +4,7 @@
 #include <xen/rwlock.h>
 #include <xen/sched.h>
 #include <asm/domain.h>
+#include <asm/p2m.h>
 
 /* Return the size of the pool, in bytes. */
 int arch_get_paging_mempool_size(struct domain *d, uint64_t *size)
@@ -158,5 +159,40 @@ int p2m_init(struct domain *d)
     INIT_PAGE_LIST_HEAD(&p2m->pages);
 
     return 0;
+}
+
+struct page_info *p2m_get_page_from_gfn(struct domain *d, gfn_t gfn,
+                                        p2m_type_t *t)
+{
+    p2m_type_t p2mt = {0};
+    mfn_t mfn = p2m_lookup(d, gfn, &p2mt);
+
+    if ( t )
+        *t = p2mt;
+
+    if ( !mfn_valid(mfn) )
+        return NULL;
+
+    /* TODO: use get_page */
+    return mfn_to_page(mfn);
+}
+
+static paddr_t get_p2m_root_pt_mfn(struct domain *d)
+{
+    return (p2m_get_hostp2m(d)->hgatp & HGATP_PPN) << PAGE_SHIFT;
+}
+
+mfn_t p2m_lookup(struct domain *d, gfn_t gfn, p2m_type_t *t)
+{
+    vaddr_t root;
+    paddr_t pa;
+    struct p2m_domain *p2m = p2m_get_hostp2m(d);
+
+    p2m_read_lock(p2m);
+    root = (vaddr_t)map_domain_page(maddr_to_mfn(get_p2m_root_pt_mfn(d)));
+    pa = pt_walk(root, gfn_to_gaddr(gfn), false);
+    p2m_read_unlock(p2m);
+
+    return maddr_to_mfn(pa);
 }
 
