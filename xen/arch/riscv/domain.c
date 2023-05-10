@@ -274,3 +274,7 @@ void arch_vcpu_destroy(struct vcpu *v)
     /* TODO */
 }
 
+struct vcpu *alloc_dom0_vcpu0(struct domain *dom0)
+{
+    return vcpu_create(dom0, 0);
+}
