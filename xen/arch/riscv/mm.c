@@ -507,16 +507,6 @@ unsigned int xen_pt_check_contig(unsigned long vfn, mfn_t mfn,
     return 1;
 }
 
-int destroy_xen_mappings(unsigned long v, unsigned long e)
-{
-    (void) v;
-    (void) e;
-
-    assert_failed(__func__);
-
-    return 0;
-}
-
 void set_pte_table_bit(pte_t *pte, unsigned int tbl_bit_val)
 {
     /* table bit for RISC-V is always equal to PTE_TABLE */
