@@ -150,6 +150,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     scheduler_init();
     set_current(idle_vcpu[0]);
 
+    do_initcalls();
+
     early_printk("All set up\n");
 
     for ( ;; )
