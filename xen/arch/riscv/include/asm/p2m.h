@@ -65,6 +65,12 @@ void p2m_altp2m_check(struct vcpu *v, uint16_t idx)
     /* Not supported on ARM. */
 }
 
+int guest_physmap_add_entry(struct domain *d,
+                            gfn_t gfn,
+                            mfn_t mfn,
+                            unsigned long page_order,
+                            p2m_type_t t);
+
 /* Untyped version for RAM only, for compatibility */
 static inline int guest_physmap_add_page(struct domain *d,
                                          gfn_t gfn,

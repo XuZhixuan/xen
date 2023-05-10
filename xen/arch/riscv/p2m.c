@@ -196,3 +196,37 @@ mfn_t p2m_lookup(struct domain *d, gfn_t gfn, p2m_type_t *t)
     return maddr_to_mfn(pa);
 }
 
+int guest_physmap_add_entry(struct domain *d,
+                            gfn_t gfn,
+                            mfn_t mfn,
+                            unsigned long page_order,
+                            p2m_type_t t)
+{
+    const unsigned long nr = 1 << page_order;
+    paddr_t guest_start, guest_end;
+    vaddr_t root;
+    unsigned long i = 0;
+
+    printk("%s: map %lu pages from gfn 0x%02lx to mfn 0x%02lx\n", __func__,
+            nr, gfn_to_gaddr(gfn), mfn_to_maddr(mfn));
+
+    root = (vaddr_t)map_domain_page(maddr_to_mfn(get_p2m_root_pt_mfn(d)));
+    guest_start = gfn_to_gaddr(gfn);
+    guest_end = guest_start + (nr * PAGE_SIZE);
+
+    for (i = 0; i < nr; i++ )
+    {
+        paddr_t guest_addr = guest_start + (i * PAGE_SIZE);
+        paddr_t supervisor_addr = mfn_to_maddr(mfn) + (i * PAGE_SIZE);
+        pt_update(root, guest_addr, supervisor_addr, false,
+                  d, PTE_READABLE | PTE_WRITABLE | PTE_EXECUTABLE | PTE_USER);
+
+        /* Remove this after pt_update/pt_walk stand the test of time */
+        BUG_ON(pt_walk(root, guest_addr, false) != supervisor_addr);
+
+    }
+    unmap_domain_page(root);
+
+    return 0;
+}
+
