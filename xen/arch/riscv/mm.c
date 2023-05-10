@@ -809,3 +809,20 @@ out:
     return pa;
 }
 
+/* Map a 4k page in a fixmap entry */
+void set_fixmap(unsigned map, mfn_t mfn, unsigned int flags)
+{
+    pte_t pte;
+
+    pte = mfn_to_xen_entry(mfn, 0x0);
+    pte.pte |= PTE_LEAF_DEFAULT;
+    write_pte(&xen_fixmap[pt_index(0, FIXMAP_ADDR(map))], pte);
+}
+
+/* Remove a mapping from a fixmap entry */
+void clear_fixmap(unsigned map)
+{
+    pte_t pte = {0};
+    write_pte(&xen_fixmap[pt_index(0, FIXMAP_ADDR(map))], pte);
+}
+
