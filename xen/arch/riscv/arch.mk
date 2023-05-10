@@ -12,7 +12,7 @@ riscv-march-$(CONFIG_RISCV_ISA_C)       := $(riscv-march-y)c
 # into the upper half _or_ the lower half of the address space.
 # -mcmodel=medlow would force Xen into the lower half.
 
-CFLAGS += -march=$(riscv-march-y) -mstrict-align -mcmodel=medany
+CFLAGS += -march=$(riscv-march-y) -mstrict-align -mcmodel=medany -Og
 
 # TODO: Drop override when more of the build is working
 override ALL_OBJS-y = common/built_in.o drivers/built_in.o lib/built_in.o arch/$(TARGET_ARCH)/built_in.o
