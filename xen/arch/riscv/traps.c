@@ -9,6 +9,7 @@
 #include <xen/errno.h>
 #include <xen/lib.h>
 #include <xen/sched.h>
+#include <xen/softirq.h>
 
 #include <asm/csr.h>
 #include <asm/early_printk.h>
@@ -17,6 +18,11 @@
 
 #define cast_to_bug_frame(addr) \
     (const struct bug_frame *)(addr)
+
+#define print_csr(_csr) \
+    do {    \
+        printk("\t" #_csr ": 0x%02lx\n", csr_read(_csr)); \
+    } while ( 0 )
 
 /*
  * Initialize the trap handling.
@@ -108,14 +114,14 @@ static const char *decode_cause(unsigned long cause)
     return decode_trap_cause(cause);
 }
 
-static void do_unexpected_trap(const struct cpu_user_regs *regs)
-{
-    unsigned long cause = csr_read(CSR_SCAUSE);
+// static void do_unexpected_trap(const struct cpu_user_regs *regs)
+// {
+//     unsigned long cause = csr_read(CSR_SCAUSE);
 
-    printk("Unhandled exception: %s\n", decode_cause(cause));
+//     printk("Unhandled exception: %s\n", decode_cause(cause));
 
-    die();
-}
+//     die();
+// }
 
 void show_execution_state(const struct cpu_user_regs *regs)
 {
@@ -262,6 +268,74 @@ void context_save_csrs(struct vcpu *vcpu)
     vcpu->arch.vsatp = csr_read(CSR_VSATP);
 }
 
+/*
+ * Actions that needs to be done after entering the hypervisor from the
+ * guest and before we handle any request.
+ */
+void enter_hypervisor_from_guest(void)
+{
+    context_save_csrs(current);
+}
+
+static void stay_in_hypervisor(void)
+{
+    local_irq_disable();
+
+    /* Unset SPV in hstatus */
+    csr_clear(CSR_HSTATUS, HSTATUS_SPV);
+}
+
+static void dump_csrs(unsigned long cause)
+{
+    unsigned long hstatus;
+    bool gva;
+
+    printk("\nUnhandled Exception! dumping CSRs...\n");
+
+    printk("Supervisor CSRs\n");
+    print_csr(CSR_STVEC);
+    print_csr(CSR_SATP);
+    print_csr(CSR_SEPC);
+
+    hstatus = csr_read(CSR_HSTATUS);
+    gva = !!(hstatus & HSTATUS_GVA);
+
+    printk("\tCSR_STVAL: 0x%02lx%s\n",
+            csr_read(CSR_STVAL),
+            gva ? ", (guest virtual address)" : "");
+
+    printk("\tCSR_SCAUSE: 0x%02lx\n", cause);
+    printk("\t\tDescription: %s\n", decode_cause(cause));
+    print_csr(CSR_SSTATUS);
+
+    printk("\nVirtual Supervisor CSRs\n");
+    print_csr(CSR_VSTVEC);
+    print_csr(CSR_VSATP);
+    print_csr(CSR_VSEPC);
+    print_csr(CSR_VSTVAL);
+    cause = csr_read(CSR_VSCAUSE);
+    printk("\tCSR_VCAUSE: 0x%02lx\n", cause);
+    printk("\t\tDescription: %s\n", decode_cause(cause));
+    print_csr(CSR_VSSTATUS);
+
+    printk("\nHypervisor CSRs\n");
+
+    print_csr(CSR_HSTATUS);
+    printk("\t\thstatus.VTSR=%d\n", !!(hstatus & HSTATUS_VTSR));
+    printk("\t\thstatus.VTVM=%d\n", !!(hstatus & HSTATUS_VTVM));
+    printk("\t\thstatus.HU=%d\n", !!(hstatus & HSTATUS_HU));
+    printk("\t\thstatus.SPVP=%d\n", !!(hstatus & HSTATUS_SPVP));
+    printk("\t\thstatus.SPV=%d\n", !!(hstatus & HSTATUS_SPV));
+    printk("\t\thstatus.GVA=%d\n", !!(hstatus & HSTATUS_GVA));
+    print_csr(CSR_HGATP);
+    print_csr(CSR_HTVAL);
+    print_csr(CSR_HTINST);
+    print_csr(CSR_HEDELEG);
+    print_csr(CSR_HIDELEG);
+
+    panic(__func__);
+}
+
 void context_restore_csrs(struct vcpu *vcpu)
 {
     csr_write(CSR_HSTATUS, vcpu->arch.hstatus);
@@ -292,21 +366,70 @@ void context_restore_csrs(struct vcpu *vcpu)
     csr_write(CSR_VSATP, vcpu->arch.vsatp);
 }
 
+static void check_for_pcpu_work(void)
+{
+    ASSERT(!local_irq_is_enabled());
+
+    while ( softirq_pending(smp_processor_id()) )
+    {
+        local_irq_enable();
+        do_softirq();
+        local_irq_disable();
+    }
+}
+
+/*
+ * Actions that needs to be done before entering the guest. This is the
+ * last thing executed before the guest context is fully restored.
+ */
+void leave_hypervisor_to_guest(void)
+{
+    local_irq_disable();
+
+    check_for_pcpu_work();
+
+    context_restore_csrs(current);
+}
+
 void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
-    uint32_t instr = read_instr(pc);
+    unsigned long cause = csr_read(CSR_SCAUSE);
 
-    if ( is_valid_bugaddr(instr) )
+    if ( trap_from_guest )
+        enter_hypervisor_from_guest();
+    else
     {
-        if ( !do_bug_frame(cpu_regs, pc) )
+        uint32_t instr = read_instr(pc);
+
+        if ( is_valid_bugaddr(instr) )
         {
-            cpu_regs->sepc += GET_INSN_LENGTH(instr);
-            return;
+            if ( !do_bug_frame(cpu_regs, pc) )
+            {
+                cpu_regs->sepc += GET_INSN_LENGTH(instr);
+                return;
+            }
         }
     }
 
-    do_unexpected_trap(cpu_regs);
+    if ( cause & CAUSE_IRQ_FLAG )
+    {
+        /* Handle interrupt */
+        unsigned long icause = cause & ~CAUSE_IRQ_FLAG;
+        switch ( icause )
+        {
+        default:
+            dump_csrs(cause);
+            break;
+        }
+    } else {
+        dump_csrs(cause);
+    }
+
+    if ( trap_from_guest )
+        leave_hypervisor_to_guest();
+    else
+        stay_in_hypervisor();
 }
 
 enum mc_disposition arch_do_multicall_call(struct mc_state *state)
