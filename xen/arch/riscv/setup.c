@@ -66,12 +66,19 @@ void __init fdt_map(paddr_t dtb_addr)
     }
 }
 
+static __used void init_done(void)
+{
+    /* TODO: free init memory */
+    startup_cpu_idle_loop();
+}
+
 void __init noreturn start_xen(unsigned long bootcpu_id,
                                paddr_t dtb_addr)
 {
     struct bootmodule *xen_bootmodule;
     size_t fdt_size;
     const char *cmdline;
+    struct domain *d;
 
     /*
      * tp register contains an address of physical cpu information.
@@ -157,6 +164,17 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     create_dom0();
 
     early_printk("All set up\n");
+
+    system_state = SYS_STATE_active;
+
+    for_each_domain( d )
+        domain_unpause_by_systemcontroller(d);
+
+    /* Switch on to the dynamically allocated stack for the idle vcpu
+     * since the static one we're running on is about to be freed. */
+    memcpy(idle_vcpu[0]->arch.cpu_info, get_cpu_info(),
+           sizeof(struct cpu_info));
+    switch_stack_and_jump(idle_vcpu[0]->arch.cpu_info, init_done);
 
     for ( ;; )
         asm volatile ("wfi");

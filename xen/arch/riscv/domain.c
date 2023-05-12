@@ -98,12 +98,12 @@ void context_switch(struct vcpu *prev, struct vcpu *next)
 
 void continue_running(struct vcpu *same)
 {
-    assert_failed(__func__);
+    /* Nothing to do */
 }
 
 void sync_local_execstate(void)
 {
-    assert_failed(__func__);
+    /* Nothing to do -- no lazy switching */
 }
 
 void sync_vcpu_execstate(struct vcpu *v)
@@ -186,7 +186,6 @@ void arch_domain_pause(struct domain *d)
 
 void arch_domain_unpause(struct domain *d)
 {
-    assert_failed(__func__);
 }
 
 int arch_domain_soft_reset(struct domain *d)
@@ -353,4 +352,52 @@ void arch_vcpu_destroy(struct vcpu *v)
 struct vcpu *alloc_dom0_vcpu0(struct domain *dom0)
 {
     return vcpu_create(dom0, 0);
+}
+
+static void do_idle(void)
+{
+    unsigned int cpu = smp_processor_id();
+
+    rcu_idle_enter(cpu);
+    /* rcu_idle_enter() can raise TIMER_SOFTIRQ. Process it now. */
+    process_pending_softirqs();
+
+    local_irq_disable();
+    if ( cpu_is_haltable(cpu) )
+    {
+        wfi();
+    }
+    local_irq_enable();
+
+    rcu_idle_exit(cpu);
+}
+
+void idle_loop(void)
+{
+    unsigned int cpu = smp_processor_id();
+
+    printk("%s\n", __func__);
+
+    for ( ; ; )
+    {
+        if ( unlikely(tasklet_work_to_do(cpu)) )
+            do_tasklet();
+        else if ( !softirq_pending(cpu) && !scrub_free_pages() &&
+                  !softirq_pending(cpu) )
+            do_idle();
+
+        do_softirq();
+    }
+}
+
+void noreturn startup_cpu_idle_loop(void)
+{
+    struct vcpu *v = current;
+
+    ASSERT(is_idle_vcpu(v));
+
+    reset_stack_and_jump(idle_loop);
+
+    /* This function is noreturn */
+    BUG();
 }
