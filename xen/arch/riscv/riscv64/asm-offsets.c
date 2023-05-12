@@ -1,7 +1,10 @@
 #define COMPILE_OFFSETS
 
 #include <asm/processor.h>
+#include <xen/sched.h>
 #include <xen/types.h>
+
+#include <asm/domain.h>
 
 #define DEFINE(_sym, _val)                                                 \
     asm volatile ("\n.ascii\"==>#define " #_sym " %0 /* " #_val " */<==\"" \
@@ -50,4 +53,25 @@ void asm_offsets(void)
     OFFSET(CPU_USER_REGS_SEPC, struct cpu_user_regs, sepc);
     OFFSET(CPU_USER_REGS_SSTATUS, struct cpu_user_regs, sstatus);
     OFFSET(CPU_USER_REGS_PREGS, struct cpu_user_regs, pregs);
+    BLANK();
+    OFFSET(VCPU_ARCH_SAVED_CONTEXT, struct vcpu, arch.saved_context);
+    OFFSET(VCPU_SAVED_CONTEXT_S0, struct arch_vcpu, saved_context.s0);
+    OFFSET(VCPU_SAVED_CONTEXT_S1, struct arch_vcpu, saved_context.s1);
+    OFFSET(VCPU_SAVED_CONTEXT_S2, struct arch_vcpu, saved_context.s2);
+    OFFSET(VCPU_SAVED_CONTEXT_S3, struct arch_vcpu, saved_context.s3);
+    OFFSET(VCPU_SAVED_CONTEXT_S4, struct arch_vcpu, saved_context.s4);
+    OFFSET(VCPU_SAVED_CONTEXT_S5, struct arch_vcpu, saved_context.s5);
+    OFFSET(VCPU_SAVED_CONTEXT_S6, struct arch_vcpu, saved_context.s6);
+    OFFSET(VCPU_SAVED_CONTEXT_S7, struct arch_vcpu, saved_context.s7);
+    OFFSET(VCPU_SAVED_CONTEXT_S8, struct arch_vcpu, saved_context.s8);
+    OFFSET(VCPU_SAVED_CONTEXT_S9, struct arch_vcpu, saved_context.s9);
+    OFFSET(VCPU_SAVED_CONTEXT_S10, struct arch_vcpu, saved_context.s10);
+    OFFSET(VCPU_SAVED_CONTEXT_S11, struct arch_vcpu, saved_context.s11);
+    OFFSET(VCPU_SAVED_CONTEXT_SP, struct arch_vcpu, saved_context.sp);
+    OFFSET(VCPU_SAVED_CONTEXT_GP, struct arch_vcpu, saved_context.gp);
+    OFFSET(VCPU_SAVED_CONTEXT_RA, struct arch_vcpu, saved_context.ra);
+    BLANK();
+    OFFSET(PCPU_INFO_GUEST_CPU_INFO, struct pcpu_info, guest_cpu_info);
+    OFFSET(PCPU_INFO_TMP, struct pcpu_info, tmp);
+    OFFSET(PCPU_INFO_STACK_CPU_REGS, struct pcpu_info, stack_cpu_regs);
 }
