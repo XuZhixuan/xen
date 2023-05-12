@@ -74,4 +74,6 @@ void asm_offsets(void)
     OFFSET(PCPU_INFO_GUEST_CPU_INFO, struct pcpu_info, guest_cpu_info);
     OFFSET(PCPU_INFO_TMP, struct pcpu_info, tmp);
     OFFSET(PCPU_INFO_STACK_CPU_REGS, struct pcpu_info, stack_cpu_regs);
+    BLANK();
+    DEFINE(CPU_INFO_SIZE, sizeof(struct cpu_info));
 }
