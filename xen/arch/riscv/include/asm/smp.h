@@ -8,6 +8,8 @@
 #include <asm/current.h>
 #endif
 
+#define INVALID_HARTID UINT_MAX
+
 DECLARE_PER_CPU(cpumask_var_t, cpu_sibling_mask);
 DECLARE_PER_CPU(cpumask_var_t, cpu_core_mask);
 
