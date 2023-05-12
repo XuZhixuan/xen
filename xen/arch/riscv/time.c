@@ -3,6 +3,9 @@
 #include <xen/bug.h>
 #include <xen/device_tree.h>
 #include <xen/sched.h>
+#include <xen/time.h>
+
+#include <asm/sbi.h>
 
 unsigned long __read_mostly cpu_khz;  /* CPU clock frequency in kHz. */
 
@@ -36,9 +39,25 @@ void domain_set_time_offset(struct domain *d, int64_t time_offset_seconds)
 
 int reprogram_timer(s_time_t timeout)
 {
-    assert_failed("need to be implemented");
+    uint64_t deadline, now;
 
-    return 0;
+    if (timeout == 0)
+    {
+        /* Disable timers */
+        csr_clear(CSR_SIE, 1ul << IRQ_S_TIMER);
+        return 1;
+    }
+    
+    deadline = ns_to_ticks(timeout) + boot_count;
+    now = get_cycles();
+    if (deadline <= now)
+        return 0;
+
+    /* Enable timer */
+    sbi_set_timer(deadline);
+    csr_set(CSR_SIE, 1ul << IRQ_S_TIMER);
+
+    return 1;
 }
 
 /* Set up the timer on the boot CPU (early init function) */
