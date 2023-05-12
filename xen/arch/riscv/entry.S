@@ -1,5 +1,6 @@
 #include <asm/asm.h>
 #include <asm/asm-offsets.h>
+#include <asm/domain.h>
 #include <asm/processor.h>
 #include <asm/riscv_encoding.h>
 #include <asm/traps.h>
@@ -171,3 +172,46 @@ ENTRY(return_to_new_vcpu64)
 
         /* Enter guest */
         sret
+
+/*
+ * struct vcpu *__context_switch(struct vcpu *prev, struct vcpu *next)
+ *
+ * a0 - prev
+ * a1 - next
+ *
+ * Returns prev in a0
+ */
+ENTRY(__context_switch)
+        REG_S   s0, VCPU_SAVED_CONTEXT_OFFSET(S0)(a0)
+        REG_S   s1, VCPU_SAVED_CONTEXT_OFFSET(S1)(a0)
+        REG_S   s2, VCPU_SAVED_CONTEXT_OFFSET(S2)(a0)
+        REG_S   s3, VCPU_SAVED_CONTEXT_OFFSET(S3)(a0)
+        REG_S   s4, VCPU_SAVED_CONTEXT_OFFSET(S4)(a0)
+        REG_S   s5, VCPU_SAVED_CONTEXT_OFFSET(S5)(a0)
+        REG_S   s6, VCPU_SAVED_CONTEXT_OFFSET(S6)(a0)
+        REG_S   s7, VCPU_SAVED_CONTEXT_OFFSET(S7)(a0)
+        REG_S   s8, VCPU_SAVED_CONTEXT_OFFSET(S8)(a0)
+        REG_S   s9, VCPU_SAVED_CONTEXT_OFFSET(S9)(a0)
+        REG_S   s10, VCPU_SAVED_CONTEXT_OFFSET(S10)(a0)
+        REG_S   s11, VCPU_SAVED_CONTEXT_OFFSET(S11)(a0)
+        REG_S   sp, VCPU_SAVED_CONTEXT_OFFSET(SP)(a0)
+        REG_S   gp, VCPU_SAVED_CONTEXT_OFFSET(GP)(a0)
+        REG_S   ra, VCPU_SAVED_CONTEXT_OFFSET(RA)(a0)
+
+        REG_L   s0, VCPU_SAVED_CONTEXT_OFFSET(S0)(a1)
+        REG_L   s1, VCPU_SAVED_CONTEXT_OFFSET(S1)(a1)
+        REG_L   s2, VCPU_SAVED_CONTEXT_OFFSET(S2)(a1)
+        REG_L   s3, VCPU_SAVED_CONTEXT_OFFSET(S3)(a1)
+        REG_L   s4, VCPU_SAVED_CONTEXT_OFFSET(S4)(a1)
+        REG_L   s5, VCPU_SAVED_CONTEXT_OFFSET(S5)(a1)
+        REG_L   s6, VCPU_SAVED_CONTEXT_OFFSET(S6)(a1)
+        REG_L   s7, VCPU_SAVED_CONTEXT_OFFSET(S7)(a1)
+        REG_L   s8, VCPU_SAVED_CONTEXT_OFFSET(S8)(a1)
+        REG_L   s9, VCPU_SAVED_CONTEXT_OFFSET(S9)(a1)
+        REG_L   s10, VCPU_SAVED_CONTEXT_OFFSET(S10)(a1)
+        REG_L   s11, VCPU_SAVED_CONTEXT_OFFSET(S11)(a1)
+        REG_L   sp, VCPU_SAVED_CONTEXT_OFFSET(SP)(a1)
+        REG_L   gp, VCPU_SAVED_CONTEXT_OFFSET(GP)(a1)
+        REG_L   ra, VCPU_SAVED_CONTEXT_OFFSET(RA)(a1)
+
+        ret

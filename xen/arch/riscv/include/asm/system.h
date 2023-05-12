@@ -80,6 +80,8 @@ static inline int local_irq_is_enabled(void)
 
 #define arch_fetch_and_add(x, v) __sync_fetch_and_add(x, v)
 
+extern struct vcpu *__context_switch(struct vcpu *prev, struct vcpu *next);
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* _ASM_RISCV_BARRIER_H */

@@ -15,9 +15,85 @@
 
 DEFINE_PER_CPU(struct vcpu *, curr_vcpu);
 
+static void ctxt_switch_from(struct vcpu *p)
+{
+    /* When the idle VCPU is running, Xen will always stay in hypervisor
+     * mode. Therefore we don't need to save the context of an idle VCPU.
+     */
+    if ( is_idle_vcpu(p) )
+    {
+        printk("%s: is_idle_vcpu\n", __func__);
+        return;
+    }
+
+    p2m_save_state(p);
+
+    vtimer_save(p);
+
+    context_save_csrs(p);
+}
+
+static void ctxt_switch_to(struct vcpu *n)
+{
+    /*
+     * When the idle VCPU is running, Xen will always stay in hypervisor
+     * mode. Therefore we don't need to restore the context of an idle VCPU.
+     */
+    if ( is_idle_vcpu(n) )
+    {
+        printk("%s: is_idle_vcpu\n", __func__);
+
+        return;
+    }
+
+    p2m_restore_state(n);
+
+    vtimer_restore(n);
+
+    context_restore_csrs(n);
+}
+
+static void schedule_tail(struct vcpu *prev)
+{
+    ASSERT(prev != current);
+
+    ctxt_switch_from(prev);
+
+    ctxt_switch_to(current);
+
+    local_irq_enable();
+
+    sched_context_switched(prev, current);
+
+    // update_runstate_area(current);
+
+    /* Ensure that the vcpu has an up-to-date time base. */
+    // update_vcpu_system_time(current);
+}
+
 void context_switch(struct vcpu *prev, struct vcpu *next)
 {
-    assert_failed(__func__);
+    ASSERT(local_irq_is_enabled());
+    ASSERT(prev != next);
+    ASSERT(!vcpu_cpu_dirty(next));
+    ASSERT(is_idle_vcpu(prev) || trap_from_guest);
+
+    // update_runstate_area(prev);
+
+    local_irq_disable();
+
+    set_current(next);
+
+    ctxt_switch_from(prev);
+
+    ctxt_switch_to(current);
+
+    tp->guest_cpu_info = next->arch.cpu_info;
+    tp->stack_cpu_regs = &next->arch.cpu_info->guest_cpu_user_regs;
+
+    prev = __context_switch(prev, next);
+
+    schedule_tail(prev);
 }
 
 void continue_running(struct vcpu *same)

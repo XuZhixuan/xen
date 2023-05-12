@@ -112,6 +112,9 @@ static inline void update_guest_memory_policy(struct vcpu *v,
                                               struct guest_memory_policy *gmp)
 {}
 
+void context_save_csrs(struct vcpu *vcpu);
+void context_restore_csrs(struct vcpu *vcpu);
+
 #endif /* !__ASSEMBLY__ */
 
 #define VCPU_SAVED_CONTEXT_OFFSET(x)   \

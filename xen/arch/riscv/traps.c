@@ -232,6 +232,66 @@ static uint32_t read_instr(unsigned long pc)
         return *(uint32_t *)pc;
 }
 
+void context_save_csrs(struct vcpu *vcpu)
+{
+    vcpu->arch.hstatus = csr_read(CSR_HSTATUS);
+    vcpu->arch.hedeleg = csr_read(CSR_HEDELEG);
+    vcpu->arch.hideleg = csr_read(CSR_HIDELEG);
+    vcpu->arch.hvip = csr_read(CSR_HVIP);
+    vcpu->arch.hip = csr_read(CSR_HIP);
+    vcpu->arch.hie = csr_read(CSR_HIE);
+    vcpu->arch.hgeie = csr_read(CSR_HGEIE);
+    vcpu->arch.henvcfg = csr_read(CSR_HENVCFG);
+    vcpu->arch.hcounteren = csr_read(CSR_HCOUNTEREN);
+    vcpu->arch.htimedelta = csr_read(CSR_HTIMEDELTA);
+    vcpu->arch.htval = csr_read(CSR_HTVAL);
+    vcpu->arch.htinst = csr_read(CSR_HTINST);
+    vcpu->arch.hgatp = csr_read(CSR_HGATP);
+#ifdef CONFIG_32BIT
+    vcpu->arch.henvcfgh = csr_read(CSR_HENVCFGH);
+    vcpu->arch.htimedeltah = csr_read(CSR_HTIMEDELTAH);
+#endif
+
+    vcpu->arch.vsstatus = csr_read(CSR_VSSTATUS);
+    vcpu->arch.vsip = csr_read(CSR_VSIP);
+    vcpu->arch.vsie = csr_read(CSR_VSIE);
+    vcpu->arch.vstvec = csr_read(CSR_VSTVEC);
+    vcpu->arch.vsscratch = csr_read(CSR_VSSCRATCH);
+    vcpu->arch.vscause = csr_read(CSR_VSCAUSE);
+    vcpu->arch.vstval = csr_read(CSR_VSTVAL);
+    vcpu->arch.vsatp = csr_read(CSR_VSATP);
+}
+
+void context_restore_csrs(struct vcpu *vcpu)
+{
+    csr_write(CSR_HSTATUS, vcpu->arch.hstatus);
+    csr_write(CSR_HEDELEG, vcpu->arch.hedeleg);
+    csr_write(CSR_HIDELEG, vcpu->arch.hideleg);
+    csr_write(CSR_HVIP, vcpu->arch.hvip);
+    csr_write(CSR_HIP, vcpu->arch.hip);
+    csr_write(CSR_HIE, vcpu->arch.hie);
+    csr_write(CSR_HGEIE, vcpu->arch.hgeie);
+    csr_write(CSR_HENVCFG, vcpu->arch.henvcfg);
+    csr_write(CSR_HCOUNTEREN, vcpu->arch.hcounteren);
+    csr_write(CSR_HTIMEDELTA, vcpu->arch.htimedelta);
+    csr_write(CSR_HTVAL, vcpu->arch.htval);
+    csr_write(CSR_HTINST, vcpu->arch.htinst);
+    csr_write(CSR_HGATP, vcpu->arch.hgatp);
+#ifdef CONFIG_32BIT
+    csr_write(CSR_HENVCFGH, vcpu->arch.henvcfgh);
+    csr_write(CSR_HTIMEDELTAH, vcpu->arch.htimedeltah);
+#endif
+
+    csr_write(CSR_VSSTATUS, vcpu->arch.vsstatus);
+    csr_write(CSR_VSIP, vcpu->arch.vsip);
+    csr_write(CSR_VSIE, vcpu->arch.vsie);
+    csr_write(CSR_VSTVEC, vcpu->arch.vstvec);
+    csr_write(CSR_VSSCRATCH, vcpu->arch.vsscratch);
+    csr_write(CSR_VSCAUSE, vcpu->arch.vscause);
+    csr_write(CSR_VSTVAL, vcpu->arch.vstval);
+    csr_write(CSR_VSATP, vcpu->arch.vsatp);
+}
+
 void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
