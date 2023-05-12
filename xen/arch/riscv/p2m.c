@@ -230,3 +230,20 @@ int guest_physmap_add_entry(struct domain *d,
     return 0;
 }
 
+void p2m_save_state(struct vcpu *p)
+{
+}
+
+void p2m_restore_state(struct vcpu *n)
+{
+    struct p2m_domain *p2m = p2m_get_hostp2m(n->domain);
+
+    if ( is_idle_vcpu(n) )
+    {
+        printk("%s: is_idle_vcpu\n", __func__);
+        return;
+    }
+
+    n->arch.hgatp = p2m->hgatp;
+}
+

@@ -140,6 +140,10 @@ struct page_info *p2m_get_page_from_gfn(struct domain *d, gfn_t gfn,
 /* Look up the MFN corresponding to a domain's GFN. */
 mfn_t p2m_lookup(struct domain *d, gfn_t gfn, p2m_type_t *t);
 
+/* Context switch */
+void p2m_save_state(struct vcpu *p);
+void p2m_restore_state(struct vcpu *n);
+
 #endif /* _XEN_P2M_H */
 
 /*
