@@ -4,8 +4,17 @@
 #include <asm/riscv_encoding.h>
 #include <asm/traps.h>
 
-/* WIP: only works while interrupting Xen context */
 ENTRY(handle_trap)
+        /*
+        * swap sscratch and tp
+        *
+        * After the swap, if a guest trapped, tp will have a pointer to pcpu_info of the guest.
+        * After the swap, If xen trapped, tp will be empty.
+        */
+        csrrw   tp, CSR_SSCRATCH, tp
+
+        /* Based on Linux kenrel arch/riscv/entry.S */
+        bnez    tp, save_to_cpuinfo
 
     /* Exceptions from xen */
 save_to_stack:
@@ -13,7 +22,22 @@ save_to_stack:
         REG_S   sp, (CPU_USER_REGS_SP - CPU_USER_REGS_SIZE) (sp)
         addi    sp, sp, -CPU_USER_REGS_SIZE
         REG_S   t0, CPU_USER_REGS_T0(sp)
+        j       save_context
 
+        /* Exceptions from guest */
+    save_to_cpuinfo:
+        /* tp->tmp = sp */
+        REG_S   sp, PCPU_INFO_TMP(tp)
+
+        /* sp = ((struct pcpu_info*)tp)->guest_cpu_info */
+        REG_L   sp, PCPU_INFO_GUEST_CPU_INFO(tp)
+
+        /* sp->guest_cpu_info->sp = tp->tmp */
+        REG_S   t0, CPU_USER_REGS_T0(sp)
+        REG_L   t0, PCPU_INFO_TMP(tp)
+        REG_S   t0, CPU_USER_REGS_SP(sp)
+
+save_context:
         /* Save registers */
         REG_S   ra, CPU_USER_REGS_RA(sp)
         REG_S   gp, CPU_USER_REGS_GP(sp)
@@ -48,10 +72,35 @@ save_to_stack:
         csrr    t0, CSR_SSTATUS
         REG_S   t0, CPU_USER_REGS_SSTATUS(sp)
 
+        /* Save guest/xen tp. Set sscratch to zero */
+        csrrw   tp, CSR_SSCRATCH, tp
+        REG_S   tp, CPU_USER_REGS_TP(sp)
+        mv      t0, tp
+        csrrw   tp, CSR_SSCRATCH, zero
+        bnez    tp, continue_save_context
+        /* if tp == 0 */
+        mv      tp, t0
+
+continue_save_context:
+        /* new_stack_cpu_regs.pregs = old_stack_cpu_res */
+        REG_L   t0, PCPU_INFO_STACK_CPU_REGS(tp)
+        REG_S   t0, CPU_USER_REGS_PREGS(sp)
+        /* Update stack_cpu_regs */
+        REG_S   sp, PCPU_INFO_STACK_CPU_REGS(tp)
+
         mv      a0, sp
         jal     do_trap
 
+        /* if trapped from guest, save tp */
+        jal     __trap_from_guest
+        beqz    a0, restore_registers
+        csrw    CSR_SSCRATCH, tp
+
 restore_registers:
+        /* Restore stack_cpu_regs */
+        REG_L   t0, CPU_USER_REGS_PREGS(sp)
+        REG_S   t0, PCPU_INFO_STACK_CPU_REGS(tp)
+
         /* Restore stack_cpu_regs */
         REG_L   t0, CPU_USER_REGS_SEPC(sp)
         csrw    CSR_SEPC, t0
@@ -87,6 +136,9 @@ restore_registers:
         REG_L   t4, CPU_USER_REGS_T4(sp)
         REG_L   t5, CPU_USER_REGS_T5(sp)
         REG_L   t6, CPU_USER_REGS_T6(sp)
+
+        /* Restore tp */
+        REG_L   tp, CPU_USER_REGS_TP(sp)
 
         /* Restore sp */
         REG_L   sp, CPU_USER_REGS_SP(sp)
