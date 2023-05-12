@@ -264,3 +264,8 @@ void vcpu_show_execution_state(struct vcpu *v)
 {
     assert_failed("need to be implented");
 }
+
+unsigned long __trap_from_guest(void)
+{
+    return tp->stack_cpu_regs == &tp->guest_cpu_info->guest_cpu_user_regs;
+}
