@@ -391,6 +391,15 @@ void leave_hypervisor_to_guest(void)
     context_restore_csrs(current);
 }
 
+void timer_interrupt(unsigned long cause, struct cpu_user_regs *regs)
+{
+    /* Disable the timer to avoid more interrupts */
+    csr_clear(CSR_SIE, 1ul << IRQ_S_TIMER);
+
+    /* Signal the generic timer code to do its work */
+    raise_softirq(TIMER_SOFTIRQ);
+}
+
 void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
@@ -418,6 +427,9 @@ void do_trap(struct cpu_user_regs *cpu_regs)
         unsigned long icause = cause & ~CAUSE_IRQ_FLAG;
         switch ( icause )
         {
+        case IRQ_S_TIMER:
+            timer_interrupt(cause, cpu_regs);
+            break;
         default:
             dump_csrs(cause);
             break;
