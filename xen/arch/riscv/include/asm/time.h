@@ -18,6 +18,11 @@ static inline s_time_t ticks_to_ns(uint64_t ticks)
     return muldiv64(ticks, SECONDS(1), 1000 * cpu_khz);
 }
 
+static inline uint64_t ns_to_ticks(s_time_t ns)
+{
+    return muldiv64(ns, 1000 * cpu_khz, SECONDS(1));
+}
+
 static inline cycles_t get_cycles_inline(void)
 {
 	cycles_t n;
