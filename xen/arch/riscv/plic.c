@@ -42,10 +42,13 @@ int plic_irq_xlate(const u32 *intspec, unsigned int intsize,
                    unsigned int *out_hwirq,
                    unsigned int *out_type)
 {
-    (void) intspec;
-    (void) intsize;
-    (void) out_hwirq;
-    (void) out_type;
+    if ( intsize != 1 )
+        return -EINVAL;
+
+    *out_hwirq = intspec[0];
+
+    if ( out_type )
+        *out_type = DT_IRQ_TYPE_NONE;
 
     return 0;
 }
