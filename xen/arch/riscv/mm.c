@@ -377,7 +377,7 @@ unsigned long get_upper_mfn_bound(void)
 
 void put_page(struct page_info *page)
 {
-    assert_failed("need to implement");
+    put_page_nr(page, 1);
 }
 
 static struct domain *page_get_owner_and_nr_reference(struct page_info *page,
