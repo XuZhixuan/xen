@@ -165,6 +165,8 @@ struct page_info *p2m_get_page_from_gfn(struct domain *d, gfn_t gfn,
                                         p2m_type_t *t)
 {
     p2m_type_t p2mt = {0};
+    struct page_info *page;
+
     mfn_t mfn = p2m_lookup(d, gfn, &p2mt);
 
     if ( t )
@@ -173,8 +175,9 @@ struct page_info *p2m_get_page_from_gfn(struct domain *d, gfn_t gfn,
     if ( !mfn_valid(mfn) )
         return NULL;
 
-    /* TODO: use get_page */
-    return mfn_to_page(mfn);
+    page = mfn_to_page(mfn);
+
+    return get_page(page, d) ? page : NULL;
 }
 
 static paddr_t get_p2m_root_pt_mfn(struct domain *d)
