@@ -125,6 +125,13 @@ struct page_info
   /* Page is Xen heap? */
 #define _PGC_xen_heap     PG_shift(2)
 #define PGC_xen_heap      PG_mask(1, 2)
+#ifdef CONFIG_STATIC_MEMORY
+/* Page is static memory */
+#define _PGC_static    PG_shift(3)
+#define PGC_static     PG_mask(1, 3)
+#else
+#define PGC_static     0
+#endif
 /* ... */
 /* Page is broken? */
 #define _PGC_broken       PG_shift(7)
