@@ -52,7 +52,7 @@ unsigned long copy_to_guest_phys(struct domain *d,
         memcpy(p, buf, size);
         unmap_domain_page(p - offset);
 
-        /* TODO: use put_page for reference counting here */
+        put_page(page);
 
         len -= size;
         buf += size;
