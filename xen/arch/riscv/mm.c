@@ -760,51 +760,46 @@ int pt_update(vaddr_t root, vaddr_t va, paddr_t pa,
 paddr_t pt_walk(vaddr_t root, vaddr_t va, bool is_xen)
 {
     paddr_t pa;
-    pte_t *second, *first, *zeroeth;
-    unsigned long index0, index1, index2;
+    int i;
+    pte_t *pte;
+    unsigned long index;
 
-    BUILD_BUG_ON(CONFIG_PAGING_LEVELS != 3);
+    for ( i = CONFIG_PAGING_LEVELS - 1, pte = (pte_t *)root; i != 0 ; i--)
+    {
+        index = pt_index(i, va);
 
-    /* TODO: make the func more generic */
+        if ( !pte_is_valid(pte[index]) || !pte_is_table(pte[index], i) )
+        {
+            pa = 0;
+            goto out;
+        }
 
-    second = (pte_t*)root;
-    index2 = pt_index(2, va);
+        pte = &pte[index];
+        pte = is_xen ? map_xen_table(pte) : map_domain_table(pte);
+    }
 
-    if ( !pte_is_valid(second[index2]) || !pte_is_table(second[index2], 2) )
+    index = pt_index(i, va);
+
+    if ( !pte_is_valid(pte[index]) )
     {
         pa = 0;
         goto out;
     }
 
-    first = &second[index2];
-    first = is_xen ? map_xen_table(first) : map_domain_table(first);
-
-    index1 = pt_index(1, va);
-
-    if ( !pte_is_valid(first[index1]) || !pte_is_table(first[index1], 1) )
-    {
-        pa = 0;
-        goto out;
-    }
-
-    zeroeth = &first[index1];
-    zeroeth = is_xen ? map_xen_table(zeroeth) : map_domain_table(zeroeth);
-
-    index0 = pt_index(0, va);
-
-    if ( !pte_is_valid(zeroeth[index0]) )
-    {
-        pa = 0;
-        goto out;
-    }
-
-    pa = pte_to_paddr(zeroeth[index0]) | (va & (PAGE_SIZE - 1));
+    pa = pte_to_paddr(pte[index]) | (va & (PAGE_SIZE - 1));
 
 out:
-    if ( !is_xen ) {
-        unmap_domain_table(second);
-        unmap_domain_table(first);
-        unmap_domain_table(zeroeth);
+    if ( !is_xen )
+    {
+        int j = CONFIG_PAGING_LEVELS - 1;
+        for ( pte = (pte_t *)root; j >= i; j--)
+        {
+            unmap_domain_table(pte);
+
+            index = pt_index(j, va);
+            pte = &pte[index];
+
+        }
     }
     return pa;
 }
