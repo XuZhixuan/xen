@@ -779,37 +779,38 @@ static pte_t *pt_next_level(pte_t *table, vaddr_t va, enum pt_level current_leve
 int pt_update(vaddr_t root, vaddr_t va, paddr_t pa,
               bool use_xenheap, struct domain *d, unsigned long flags)
 {
-    pte_t *l2, *l1, *l0, new;
+    pte_t new;
+    pte_t *pte[CONFIG_PAGING_LEVELS] = { NULL };
+    unsigned int i;
+    int res = 0;
 
     BUG_ON( !root );
     BUG_ON( SYS_STATE_boot <= SYS_STATE_early_boot );
-    BUILD_BUG_ON( CONFIG_PAGING_LEVELS != 3 );
 
-    /* Level 2 */
-    l2 = (pte_t*)root;
-    l1 = pt_next_level(l2, va, pt_level_two, use_xenheap, d);
-
-    if ( IS_ERR(l1) )
-        return PTR_ERR(l1);
-
-    /* Level 1 */
-    l0 = pt_next_level(l1, va, pt_level_one, use_xenheap, d);
-
-    if ( IS_ERR(l0) )
-        return PTR_ERR(l0);
-
-    /* Level 0 */
-    new = paddr_to_pte(pa, 0x00);
-    new.pte |= PTE_VALID | flags;
-    write_pte(&l0[pt_index(0, va)], new);
-
-    if ( !use_xenheap )
+    for ( i = CONFIG_PAGING_LEVELS - 1, pte[i] = (pte_t *)root; i != 0; i-- )
     {
-        unmap_domain_page(l1);
-        unmap_domain_page(l0);
+        pte[i - 1] = pt_next_level(pte[i], va, i, use_xenheap, d);
+        if ( IS_ERR(pte[i - 1]) )
+        {
+            res = PTR_ERR(pte[i - 1]);
+            goto out;
+        }
     }
 
-    return 0;
+    new = paddr_to_pte(pa, PTE_VALID | flags);
+    write_pte(&pte[0][pt_index(0, va)], new);
+
+out:
+    if ( !use_xenheap )
+    {
+        for ( i = 0; i < (CONFIG_PAGING_LEVELS - 1); i++)
+        {
+            if ( pte[i] )
+                unmap_domain_page(pte[i]);
+        }
+    }
+
+    return res;
 }
 
 /*
