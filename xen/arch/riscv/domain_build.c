@@ -217,9 +217,8 @@ fail:
  * (as described above) we allow higher allocations and continue until
  * that runs out (or we have allocated sufficient dom0 memory).
  */
-static void __init __attribute__((unused))
-allocate_memory_11(struct domain *d,
-                   struct kernel_info *kinfo)
+static void __init allocate_memory_11(struct domain *d,
+                                      struct kernel_info *kinfo)
 {
     const unsigned int min_low_order =
         get_order_from_bytes(min_t(paddr_t, dom0_mem, MB(128)));
@@ -401,7 +400,7 @@ static bool __init allocate_bank_memory(struct domain *d,
     return true;
 }
 
-static void __init allocate_memory(struct domain *d, struct kernel_info *kinfo)
+static void __init __attribute__((unused)) allocate_memory(struct domain *d, struct kernel_info *kinfo)
 {
     unsigned int i;
     paddr_t bank_size;
@@ -1196,7 +1195,7 @@ static int __init construct_dom0(struct domain *d)
     /* type must be set before allocate_memory */
     d->arch.type = kinfo.type;
 #endif
-    allocate_memory(d, &kinfo);
+    allocate_memory_11(d, &kinfo);
 
     rc = prepare_dtb_hwdom(d, &kinfo);
 
