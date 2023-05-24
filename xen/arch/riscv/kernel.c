@@ -199,6 +199,8 @@ static int __init kernel_zimage64_probe(struct kernel_info *info,
     info->zimage.kernel_addr = addr;
     info->zimage.len = end - start;
     info->zimage.text_offset = zimage.text_offset;
+    info->zimage.start = 0;
+
     info->load = kernel_zimage_load;
 
     info->type = DOMAIN_64BIT;
