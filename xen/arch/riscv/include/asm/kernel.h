@@ -11,6 +11,9 @@
 #include <xen/setup.h>
 
 struct kernel_info {
+#ifdef CONFIG_RISCV_64
+    enum domain_type type;
+#endif
     struct domain *d;
 
     void *fdt; /* flat device tree */

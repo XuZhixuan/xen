@@ -14,6 +14,18 @@ struct hvm_domain
     uint64_t              params[HVM_NR_PARAMS];
 };
 
+#ifdef CONFIG_RISCV_64
+enum domain_type {
+    DOMAIN_32BIT,
+    DOMAIN_64BIT,
+};
+#define is_32bit_domain(d) ((d)->arch.type == DOMAIN_32BIT)
+#define is_64bit_domain(d) ((d)->arch.type == DOMAIN_64BIT)
+#else
+#define is_32bit_domain(d) (1)
+#define is_64bit_domain(d) (0)
+#endif
+
 // /* The hardware domain has always its memory direct mapped. */
 #define is_domain_direct_mapped(d) ((d) == hardware_domain)
 
@@ -24,6 +36,10 @@ struct vtimer {
 
 struct arch_domain
 {
+#ifdef CONFIG_RISCV_64
+    enum domain_type type;
+#endif
+
     struct p2m_domain p2m;
 
     struct hvm_domain hvm;
