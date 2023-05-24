@@ -907,6 +907,10 @@ static int __init construct_dom0(struct domain *d)
     if ( rc < 0 )
         return rc;
 
+#ifdef CONFIG_RISCV_64
+    /* type must be set before allocate_memory */
+    d->arch.type = kinfo.type;
+#endif
     allocate_memory(d, &kinfo);
 
     rc = prepare_dtb_hwdom(d, &kinfo);
