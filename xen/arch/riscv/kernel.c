@@ -51,8 +51,37 @@ void __init copy_from_paddr(void *dst, paddr_t paddr, unsigned long len)
 
 static paddr_t __init kernel_zimage_place(struct kernel_info *info)
 {
-    /* GUEST_RAM0_BASE + text_offset */
-    return GUEST_RAM0_BASE + info->zimage.text_offset;
+    paddr_t load_addr;
+
+#ifdef CONFIG_RISCV_64
+    if ( (info->type == DOMAIN_64BIT) && (info->zimage.start == 0) )
+        return info->mem.bank[0].start + info->zimage.text_offset;
+#endif
+
+    /*
+     * If start is zero, the zImage is position independent, in this
+     * case Documentation/arm/Booting recommends loading below 128MiB
+     * and above 32MiB. Load it as high as possible within these
+     * constraints, while also avoiding the DTB.
+     */
+    if ( info->zimage.start == 0 )
+    {
+        paddr_t load_end;
+
+        load_end = info->mem.bank[0].start + info->mem.bank[0].size;
+        load_end = MIN(info->mem.bank[0].start + MB(128), load_end);
+
+        load_addr = load_end - info->zimage.len;
+        /* Align to 2MB */
+        load_addr &= ~((2 << 20) - 1);
+
+    }
+    else
+    {
+        load_addr = info->zimage.start;
+    }
+
+    return load_addr;
 }
 
 static void __init place_modules(struct kernel_info *info,
