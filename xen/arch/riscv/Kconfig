@@ -4,6 +4,8 @@ config RISCV
 config RISCV_64
 	def_bool y
 	select 64BIT
+	# can be removed when Xen's common code will be ready
+	select EARLY_PRINTK
 
 config ARCH_DEFCONFIG
 	string
