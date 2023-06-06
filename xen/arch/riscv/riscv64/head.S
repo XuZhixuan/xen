@@ -29,7 +29,41 @@ ENTRY(start)
 
         jal     reset_stack
 
+        /*
+         * save hart_id and dtb_base as a0 and a1 register can be used
+         * by C code ( f.e. setup_initial_pagetables will update a0 and
+         * a1 )
+         */
+        mv      s0, a0
+        mv      s1, a1
+
         jal     calc_phys_offset
+
+        jal     setup_initial_pagetables
+
+        jal     enable_mmu
+
+        la      t1, phys_offset
+        REG_L   t1, (t1)
+
+        /* Calculate proper VA after jump from 1:1 mapping */
+        la      t0, .L_primary_switched
+        sub     t0, t0, t1
+
+        /* Jump from 1:1 mapping world */
+        jr      t0
+
+.L_primary_switched:
+        /*
+         * cpu0_boot_stack address is 1:1 mapping related so it should be
+         * recalculated after jump from 1:1 mapping world as 1:1 mapping
+         * will be removed soon in start_xen().
+         */
+        jal     reset_stack
+
+        /* restore bootcpu_id and dtb address */
+        mv      a0, s0
+        mv      a1, s1
 
         tail    start_xen
 

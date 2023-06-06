@@ -26,6 +26,12 @@ unsigned long __ro_after_init phys_offset;
 #define LINK_TO_LOAD(addr) ((unsigned long)(addr) + phys_offset)
 
 /*
+ * Should be removed as soon as enough headers will be merged for inclusion of
+ * <xen/lib.h>.
+ */
+#define ARRAY_SIZE(arr)		(sizeof(arr) / sizeof((arr)[0]))
+
+/*
  * It is expected that Xen won't be more then 2 MB.
  * The check in xen.lds.S guarantees that.
  * At least 3 page tables (in case of Sv39 ) are needed to cover 2 MB.
@@ -35,8 +41,10 @@ unsigned long __ro_after_init phys_offset;
  *
  * It might be needed one more page table in case when Xen load address
  * isn't 2 MB aligned.
+ *
+ * (CONFIG_PAGING_LEVELS - 1) page tables are needed for identity mapping.
  */
-#define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) + 1)
+#define PGTBL_INITIAL_COUNT ((CONFIG_PAGING_LEVELS - 1) * 2 + 1)
 
 pte_t __section(".bss.page_aligned") __aligned(PAGE_SIZE)
 stage1_pgtbl_root[PAGETABLE_ENTRIES];
@@ -75,6 +83,7 @@ static void __init setup_initial_mapping(struct mmu_desc *mmu_desc,
     unsigned int index;
     pte_t *pgtbl;
     unsigned long page_addr;
+    bool is_identity_mapping = map_start == pa_start;
 
     if ( (unsigned long)_start % XEN_PT_LEVEL_SIZE(0) )
     {
@@ -108,16 +117,18 @@ static void __init setup_initial_mapping(struct mmu_desc *mmu_desc,
             {
                 unsigned long paddr = (page_addr - map_start) + pa_start;
                 unsigned int permissions = PTE_LEAF_DEFAULT;
+                unsigned long addr = is_identity_mapping
+                                     ? page_addr : LINK_TO_LOAD(page_addr);
                 pte_t pte_to_be_written;
 
                 index = pt_index(0, page_addr);
 
-                if ( is_kernel_text(LINK_TO_LOAD(page_addr)) ||
-                     is_kernel_inittext(LINK_TO_LOAD(page_addr)) )
-                    permissions =
-                        PTE_EXECUTABLE | PTE_READABLE | PTE_VALID;
+                if ( is_kernel_text(addr) ||
+                     is_kernel_inittext(addr) )
+                        permissions =
+                            PTE_EXECUTABLE | PTE_READABLE | PTE_VALID;
 
-                if ( is_kernel_rodata(LINK_TO_LOAD(page_addr)) )
+                if ( is_kernel_rodata(addr) )
                     permissions = PTE_READABLE | PTE_VALID;
 
                 pte_to_be_written = paddr_to_pte(paddr, permissions);
@@ -232,22 +243,18 @@ void __init setup_initial_pagetables(void)
                           linker_start,
                           linker_end,
                           load_start);
+
+    if ( linker_start == load_start )
+        return;
+
+    setup_initial_mapping(&mmu_desc,
+                          load_start,
+                          load_end,
+                          load_start);
 }
 
-void __init noreturn noinline enable_mmu()
+void __init enable_mmu(void)
 {
-    /*
-     * Calculate a linker time address of the mmu_is_enabled
-     * label and update CSR_STVEC with it.
-     * MMU is configured in a way where linker addresses are mapped
-     * on load addresses so in a case when linker addresses are not equal
-     * to load addresses, after MMU is enabled, it will cause
-     * an exception and jump to linker time addresses.
-     * Otherwise if load addresses are equal to linker addresses the code
-     * after mmu_is_enabled label will be executed without exception.
-     */
-    csr_write(CSR_STVEC, LOAD_TO_LINK((unsigned long)&&mmu_is_enabled));
-
     /* Ensure page table writes precede loading the SATP */
     sfence_vma();
 
@@ -255,25 +262,30 @@ void __init noreturn noinline enable_mmu()
     csr_write(CSR_SATP,
               PFN_DOWN((unsigned long)stage1_pgtbl_root) |
               RV_STAGE1_MODE << SATP_MODE_SHIFT);
+}
 
-    asm volatile ( ".p2align 2" );
- mmu_is_enabled:
-    /*
-     * Stack should be re-inited as:
-     * 1. Right now an address of the stack is relative to load time
-     *    addresses what will cause an issue in case of load start address
-     *    isn't equal to linker start address.
-     * 2. Addresses in stack are all load time relative which can be an
-     *    issue in case when load start address isn't equal to linker
-     *    start address.
-     *
-     * We can't return to the caller because the stack was reseted
-     * and it may have stash some variable on the stack.
-     * Jump to a brand new function as the stack was reseted
-     */
+void __init remove_identity_mapping(void)
+{
+    unsigned int i;
+    pte_t *pgtbl;
+    unsigned int index, xen_index;
+    unsigned long load_addr = LINK_TO_LOAD(_start);
 
-    switch_stack_and_jump((unsigned long)cpu0_boot_stack + STACK_SIZE,
-                          cont_after_mmu_is_enabled);
+    for ( pgtbl = stage1_pgtbl_root, i = 0;
+          i <= (CONFIG_PAGING_LEVELS - 1);
+          i++ )
+    {
+        index = pt_index(CONFIG_PAGING_LEVELS - 1 - i, load_addr);
+        xen_index = pt_index(CONFIG_PAGING_LEVELS - 1 - i, XEN_VIRT_START);
+
+        if ( index != xen_index )
+        {
+            pgtbl[index].pte = 0;
+            break;
+        }
+
+        pgtbl = (pte_t *)pte_to_paddr(pgtbl[index]);
+    }
 }
 
 /*

@@ -9,7 +9,8 @@
 void setup_initial_pagetables(void);
 
 void enable_mmu(void);
-void cont_after_mmu_is_enabled(void);
+
+void remove_identity_mapping(void);
 
 void calc_phys_offset(void);
 
