@@ -20,8 +20,6 @@ struct mmu_desc {
     pte_t *pgtbl_base;
 };
 
-extern unsigned char cpu0_boot_stack[STACK_SIZE];
-
 unsigned long __ro_after_init phys_offset;
 
 #define LOAD_TO_LINK(addr) ((unsigned long)(addr) - phys_offset)
