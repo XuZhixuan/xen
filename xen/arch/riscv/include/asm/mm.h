@@ -11,4 +11,6 @@ void setup_initial_pagetables(void);
 void enable_mmu(void);
 void cont_after_mmu_is_enabled(void);
 
+void calc_phys_offset(void);
+
 #endif /* _ASM_RISCV_MM_H */

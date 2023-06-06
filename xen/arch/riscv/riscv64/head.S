@@ -29,6 +29,8 @@ ENTRY(start)
 
         jal     reset_stack
 
+        jal     calc_phys_offset
+
         tail    start_xen
 
         .section .text, "ax", %progbits
