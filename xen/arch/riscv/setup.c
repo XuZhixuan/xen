@@ -7,6 +7,7 @@
 #include <public/version.h>
 
 #include <asm/early_printk.h>
+#include <asm/processor.h>
 #include <asm/traps.h>
 
 /* Xen stack for bringing up the first CPU. */
@@ -39,6 +40,17 @@ void arch_get_xen_caps(xen_capabilities_info_t *info)
 void __init noreturn start_xen(unsigned long bootcpu_id,
                                paddr_t dtb_addr)
 {
+    /*
+     * tp register contains an address of physical cpu information.
+     * So write physical CPU info of boot cpu to tp register
+     * It will be used later by get_processor_id() to get process_id ( look at
+     * <asm/processor.h> ):
+     *   #define get_processor_id()    (tp->processor_id)
+     */
+    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[bootcpu_id]));
+
+    set_processor_id(bootcpu_id);
+
     remove_identity_mapping();
 
     early_printk("Hello from C env\n");

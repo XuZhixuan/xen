@@ -2,6 +2,11 @@
 #include <xen/cpumask.h>
 #include <xen/lib.h>
 
+#include <asm/processor.h>
+
+/* tp points to one of these per cpu */
+struct pcpu_info pcpu_info[NR_CPUS];
+
 void arch_flush_tlb_mask(const cpumask_t *mask)
 {
     assert_failed("need to be implemented");

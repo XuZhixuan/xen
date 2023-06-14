@@ -12,9 +12,6 @@
 
 #include <asm/page-bits.h>
 
-#define pfn_to_paddr(pfn) ((paddr_t)(pfn) << PAGE_SHIFT)
-#define paddr_to_pfn(pa)  ((unsigned long)((pa) >> PAGE_SHIFT))
-
 extern unsigned char cpu0_boot_stack[];
 
 /* Align Xen to a 2 MiB boundary. */

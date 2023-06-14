@@ -11,6 +11,9 @@
 #include <asm/mm.h>
 #include <asm/page-bits.h>
 
+#define pfn_to_paddr(pfn) ((paddr_t)(pfn) << PAGE_SHIFT)
+#define paddr_to_pfn(pa)  ((unsigned long)((pa) >> PAGE_SHIFT))
+
 #define VPN_MASK                    (PAGETABLE_ENTRIES - 1UL)
 
 #define XEN_PT_LEVEL_ORDER(lvl)     ((lvl) * PAGETABLE_ORDER)
