@@ -4,6 +4,7 @@
 #include <xen/bug.h>
 #include <xen/cpu.h>
 #include <xen/cpumask.h>
+#include <xen/device_tree.h>
 #include <xen/init.h>
 #include <xen/smp.h>
 #include <xen/nodemask.h>
@@ -60,6 +61,120 @@ smp_clear_cpu_maps (void)
     cpumask_set_cpu(0, &cpu_possible_map);
     cpumask_set_cpu(0, &cpu_online_map);
     cpumask_copy(&cpu_present_map, &cpu_possible_map);
+}
+
+/**
+ * of_get_cpu_hwid - Get the hardware ID from a CPU device node
+ *
+ * @cpun: CPU number(logical index) for which device node is required
+ * @thread: The local thread number to get the hardware ID for.
+ *
+ * Return: The hardware ID for the CPU node or ~0ULL if not found.
+ */
+u64 of_get_cpu_hwid(struct dt_device_node *cpun, unsigned int thread)
+{
+    const __be32 *cell;
+    int ac;
+    u32 len;
+
+    ac = dt_n_addr_cells(cpun);
+    cell = dt_get_property(cpun, "reg", &len);
+    if (!cell || !ac || ((sizeof(*cell) * ac * (thread + 1)) > len))
+        return ~0ULL;
+
+    cell += ac * thread;
+    return dt_read_number(cell, ac);
+}
+
+/*
+ * Returns the hart ID of the given device tree node, or -ENODEV if the node
+ * isn't an enabled and valid RISC-V hart node.
+ */
+int riscv_of_processor_hartid(struct dt_device_node *node, unsigned long *hart)
+{
+    const char *isa;
+
+    if ( !dt_device_is_compatible(node, "riscv") )
+    {
+        printk("Found incompatible CPU\n");
+        return -ENODEV;
+    }
+
+    *hart = (unsigned long) of_get_cpu_hwid(node, 0);
+    if ( *hart == ~0UL )
+    {
+        printk("Found CPU without hart ID\n");
+        return -ENODEV;
+    }
+
+    if ( !dt_device_is_available(node))
+    {
+        printk("CPU with hartid=%lu is not available\n", *hart);
+        return -ENODEV;
+    }
+
+    if ( dt_property_read_string(node, "riscv,isa", &isa) )
+    {
+        printk("CPU with hartid=%lu has no \"riscv,isa\" property\n", *hart);
+        return -ENODEV;
+    }
+
+    if ( isa[0] != 'r' || isa[1] != 'v' )
+    {
+        printk("CPU with hartid=%lu has an invalid ISA of \"%s\"\n", *hart, isa);
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
+void __init smp_init_cpus(void)
+{
+    struct dt_device_node *cpus = dt_find_node_by_path("/cpus");
+    struct dt_device_node *cpu;
+    unsigned long hart;
+    bool found_boot_cpu = false;
+    int cpuid = 1;
+    int rc;
+
+    dt_for_each_child_node( cpus, cpu )
+    {
+        if ( !dt_device_type_is_equal(cpu, "cpu") )
+            continue;
+
+        rc = riscv_of_processor_hartid(cpu, &hart);
+        if ( rc < 0 )
+            continue;
+
+        if ( hart == cpuid_to_hartid_map(0) )
+        {
+            BUG_ON(found_boot_cpu);
+            found_boot_cpu = 1;
+            continue;
+        }
+
+        if ( cpuid >= NR_CPUS )
+        {
+            printk("Invalid cpuid [%d] for hartid [%lu]\n",
+                cpuid, hart);
+            continue;
+        }
+
+        cpuid_to_hartid_map(cpuid) = hart;
+        cpuid++;
+    }
+
+    BUG_ON(!found_boot_cpu);
+
+    if ( cpuid > NR_CPUS )
+        printk("Total number of cpus [%d] is greater than nr_cpus option value [%d]\n",
+            cpuid, NR_CPUS);
+
+    for ( cpuid = 1; cpuid < NR_CPUS; cpuid++ )
+    {
+        if ( cpuid_to_hartid_map(cpuid) != INVALID_HARTID )
+            cpumask_set_cpu(cpuid, &cpu_possible_map);
+    }
 }
 
 void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)

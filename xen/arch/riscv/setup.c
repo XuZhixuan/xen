@@ -139,6 +139,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     if ( sbi_probe_extension(SBI_EXT_HSM) < 0 )
         panic("HSM extenstion isn't supported\n");
 
+    smp_init_cpus();
+
     preinit_xen_time();
 
     plic_preinit();

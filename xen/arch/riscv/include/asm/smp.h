@@ -42,6 +42,7 @@ static inline unsigned int __raw_smp_processor_id(void)
 #define smp_processor_id() (__raw_smp_processor_id())
 
 extern void smp_clear_cpu_maps (void);
+extern void smp_init_cpus(void);
 void smp_setup_processor_id(unsigned long boot_cpu_hartid);
 
 /*
