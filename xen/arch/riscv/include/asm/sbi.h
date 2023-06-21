@@ -28,6 +28,7 @@
 #define SBI_EXT_TIME                        0x54494D45
 #define SBI_EXT_IPI                         0x735049
 #define SBI_EXT_RFENCE                      0x52464E43
+#define SBI_EXT_HSM                         0x48534D
 
 /* SBI function IDs for BASE extension */
 #define SBI_EXT_BASE_GET_SPEC_VERSION   0x0
@@ -70,6 +71,13 @@
 
 #define SBI_SPEC_VERSION_DEFAULT	0x1
 
+enum sbi_ext_hsm_fid {
+	SBI_EXT_HSM_HART_START = 0,
+	SBI_EXT_HSM_HART_STOP,
+	SBI_EXT_HSM_HART_STATUS,
+	SBI_EXT_HSM_HART_SUSPEND,
+};
+
 struct cpumask;
 
 extern unsigned long sbi_spec_version;
@@ -83,6 +91,9 @@ struct sbiret sbi_ecall(unsigned long ext, unsigned long fid,
                         unsigned long arg0, unsigned long arg1,
                         unsigned long arg2, unsigned long arg3,
                         unsigned long arg4, unsigned long arg5);
+
+int sbi_hsm_hart_start(unsigned long hartid, unsigned long saddr,
+                       unsigned long priv);
 
 /*
  * Convert SBI spec error code into Xvisor error code

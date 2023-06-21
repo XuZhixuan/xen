@@ -24,6 +24,7 @@
 #include <asm/early_printk.h>
 #include <asm/processor.h>
 #include <asm/plic.h>
+#include <asm/sbi.h>
 #include <asm/system.h>
 #include <asm/traps.h>
 #include <asm/uart.h>
@@ -134,6 +135,9 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     dt_unflatten_host_device_tree();
 
     tasklet_subsys_init();
+
+    if ( sbi_probe_extension(SBI_EXT_HSM) < 0 )
+        panic("HSM extenstion isn't supported\n");
 
     preinit_xen_time();
 

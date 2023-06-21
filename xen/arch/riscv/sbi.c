@@ -64,6 +64,19 @@ int sbi_err_map_xen_errno(int err)
     };
 }
 
+int sbi_hsm_hart_start(unsigned long hartid, unsigned long saddr,
+                       unsigned long priv)
+{
+	struct sbiret ret;
+
+	ret = sbi_ecall(SBI_EXT_HSM, SBI_EXT_HSM_HART_START,
+			hartid, saddr, priv, 0, 0, 0);
+	if (ret.error)
+		return sbi_err_map_xen_errno(ret.error);
+	else
+		return 0;
+}
+
 void sbi_cpumask_to_hartmask(const struct cpumask *cmask,
                  struct cpumask *hmask)
 {
