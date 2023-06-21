@@ -88,6 +88,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     percpu_init_areas();
 
+    smp_setup_processor_id(bootcpu_id);
+
     setup_virtual_regions(NULL, NULL);
     smp_clear_cpu_maps();
 

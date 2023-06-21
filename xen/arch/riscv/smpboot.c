@@ -19,6 +19,10 @@ DEFINE_PER_CPU_READ_MOSTLY(cpumask_var_t, cpu_core_mask);
 /* Fake one node for now. See also include/asm-arm/numa.h */
 nodemask_t __read_mostly node_online_map = { { [0] = 1UL } };
 
+unsigned long __cpuid_to_hartid_map[NR_CPUS] __ro_after_init = {
+    [0 ... NR_CPUS-1] = INVALID_HARTID
+};
+
 int __cpu_up(unsigned int cpu)
 {
     assert_failed("need to be implemented\n");
@@ -57,3 +61,9 @@ smp_clear_cpu_maps (void)
     cpumask_set_cpu(0, &cpu_online_map);
     cpumask_copy(&cpu_present_map, &cpu_possible_map);
 }
+
+void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)
+{
+    cpuid_to_hartid_map(0) = boot_cpu_hartid;
+}
+

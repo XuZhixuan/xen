@@ -40,5 +40,12 @@ static inline unsigned int __raw_smp_processor_id(void)
 #define smp_processor_id() (__raw_smp_processor_id())
 
 extern void smp_clear_cpu_maps (void);
+void smp_setup_processor_id(unsigned long boot_cpu_hartid);
+
+/*
+ * Mapping between linux logical cpu index and hartid.
+ */
+extern unsigned long __cpuid_to_hartid_map[NR_CPUS];
+#define cpuid_to_hartid_map(cpu) __cpuid_to_hartid_map[cpu]
 
 #endif /* _ASM_RISCV_SMP_H */
