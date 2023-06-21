@@ -18,6 +18,13 @@ integer_param("dom0_max_vcpus", opt_dom0_max_vcpus);
 static u64 __initdata dom0_mem;
 static bool __initdata dom0_mem_set;
 
+int __init parse_arch_dom0_param(const char *s, const char *e)
+{
+    printk("%s: nothing to parse for now?\n", __func__);
+
+    return -EINVAL;
+}
+
 /*
  * Amount of extra space required to dom0's device tree.  No new nodes
  * are added (yet) but one terminating reserve map entry (16 bytes) is
