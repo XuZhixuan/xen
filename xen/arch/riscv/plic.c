@@ -8,6 +8,11 @@
 #include <asm/plic.h>
 #include <asm/vplic.h>
 
+void __init plic_init_secondary_cpu(void)
+{
+    printk("need to be implemented\n");
+}
+
 static void __init plic_dt_preinit(void)
 {
     int rc = -ENODEV;

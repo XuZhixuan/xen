@@ -11,4 +11,6 @@
  */
 extern void plic_preinit(void);
 
+void plic_init_secondary_cpu(void);
+
 #endif

@@ -205,4 +205,3 @@ void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)
 {
     cpuid_to_hartid_map(0) = boot_cpu_hartid;
 }
-
