@@ -143,6 +143,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     nr_cpu_ids = smp_get_max_cpus();
     printk(XENLOG_INFO "SMP: Allowing %u CPUs\n", nr_cpu_ids);
 
+    do_presmp_initcalls();
 
     preinit_xen_time();
 
