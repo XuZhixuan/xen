@@ -177,6 +177,30 @@ void __init smp_init_cpus(void)
     }
 }
 
+static int setup_cpu_sibling_map(int cpu)
+{
+    if ( !zalloc_cpumask_var(&per_cpu(cpu_sibling_mask, cpu)) ||
+         !zalloc_cpumask_var(&per_cpu(cpu_core_mask, cpu)) )
+        return -ENOMEM;
+
+    /* A CPU is a sibling with itself and is always on its own core. */
+    cpumask_set_cpu(cpu, per_cpu(cpu_sibling_mask, cpu));
+    cpumask_set_cpu(cpu, per_cpu(cpu_core_mask, cpu));
+
+    return 0;
+}
+
+void __init smp_prepare_cpus(void)
+{
+    int rc;
+
+    cpumask_copy(&cpu_present_map, &cpu_possible_map);
+
+    rc = setup_cpu_sibling_map(0);
+    if ( rc )
+        panic("Unable to allocate CPU sibling/core maps\n");
+}
+
 void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)
 {
     cpuid_to_hartid_map(0) = boot_cpu_hartid;
