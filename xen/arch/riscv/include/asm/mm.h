@@ -16,6 +16,9 @@ extern unsigned long phys_offset;
 
 #define convert_level(level) (HYP_PT_ROOT_LEVEL - level)
 
+#define LOAD_TO_LINK(addr) ((unsigned long)(addr) - phys_offset)
+#define LINK_TO_LOAD(addr) ((unsigned long)(addr) + phys_offset)
+
 /* Align Xen to a 2 MiB boundary. */
 // #define XEN_PADDR_ALIGN (1 << 21)
 
