@@ -12,6 +12,7 @@ config NR_CPUS
 	default "4" if ARM && QEMU
 	default "4" if ARM && MPSOC
 	default "128" if ARM
+	default "4" if RISCV
 	help
 	  Controls the build-time size of various arrays and bitmaps
 	  associated with multiple-cpu management.  It is the upper bound of
