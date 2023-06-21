@@ -41,7 +41,7 @@ void __cpu_die(unsigned int cpu)
     assert_failed("need to be implemented\n");
 }
 
-int __init
+unsigned int __init
 smp_get_max_cpus(void)
 {
     int i, max_cpus = 0;

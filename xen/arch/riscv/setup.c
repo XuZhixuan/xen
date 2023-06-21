@@ -140,6 +140,9 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
         panic("HSM extenstion isn't supported\n");
 
     smp_init_cpus();
+    nr_cpu_ids = smp_get_max_cpus();
+    printk(XENLOG_INFO "SMP: Allowing %u CPUs\n", nr_cpu_ids);
+
 
     preinit_xen_time();
 
