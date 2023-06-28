@@ -5,10 +5,7 @@
  * Copyright (C) 2004 Red Hat, Inc. All Rights Reserved.
  * Written by David Howells (dhowells@redhat.com)
  */
-
 #include <xen/bitops.h>
-#include <xen/kernel.h>
-#include <asm/bitops.h>
 #include <asm/types.h>
 #include <asm/byteorder.h>
 
@@ -52,7 +49,7 @@ found_first:
 	if (tmp == 0UL)		/* Are any bits set? */
 		return result + size;	/* Nope. */
 found_middle:
-	return result + ffs(tmp);
+	return result + __ffs(tmp);
 }
 EXPORT_SYMBOL(find_next_bit);
 #endif
@@ -270,10 +267,10 @@ found_first:
 	if (tmp == 0UL)		/* Are any bits set? */
 		return result + size; /* Nope. */
 found_middle:
-	return result + ffs(tmp);
+	return result + __ffs(tmp);
 
 found_middle_swap:
-	return result + ffs(ext2_swab(tmp));
+	return result + __ffs(ext2_swab(tmp));
 }
 EXPORT_SYMBOL(find_next_bit_le);
 #endif

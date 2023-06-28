@@ -128,9 +128,8 @@ static inline int fls(unsigned int x)
 
 static inline int flsl(unsigned long x)
 {
-   return generic_flsl(x);
+    return generic_flsl(x);
 }
-
 
 #define test_and_set_bit   __test_and_set_bit
 #define test_and_clear_bit __test_and_clear_bit
@@ -180,6 +179,7 @@ extern unsigned long find_first_zero_bit(const unsigned long *addr,
 					 unsigned long size);
 
 #define ffs(x) ({ unsigned int __t = (x); fls(__t & -__t); })
+
 /**
  * ffs - find first bit in word.
  * @word: The word to search
