@@ -39,6 +39,22 @@
  *                 ...                  | 194 GB | L2 0 - 193 | Unused
  * ============================================================================
  *
+#elif RV_STAGE1_MODE == SATP_MODE_SV48
+ * ============================================================================
+ *    Start addr    |   End addr        |  Size  | Slot       |area description
+ * ============================================================================
+ * FFFFFFFFC0800000 |  FFFFFFFFFFFFFFFF |1016 MB | L3 511     | Unused
+ * FFFFFFFFC0600000 |  FFFFFFFFC0800000 |  2 MB  | L3 511     | Fixmap
+ * FFFFFFFFC0200000 |  FFFFFFFFC0600000 |  4 MB  | L3 511     | FDT
+ * FFFFFFFFC0000000 |  FFFFFFFFC0200000 |  2 MB  | L3 511     | Xen
+ *                 ...                  |  1 GB  | L3 510     | Unused
+ * 0000003200000000 |  0000007F80000000 | 309 GB | L3 200-509 | Direct map
+ *                 ...                  |  1 GB  | L3 199     | Unused
+ * 0000003100000000 |  00000031C0000000 |  3 GB  | L3 196-198 | Frametable
+ *                 ...                  |  1 GB  | L3 195     | Unused
+ * 0000003080000000 |  00000030C0000000 |  1 GB  | L3 194     | VMAP
+ *                 ...                  | 194 GB | L3 0 - 193 | Unused
+ * ============================================================================
 #endif
  */
 
@@ -77,46 +93,37 @@
   name:
 #endif
 
-#ifndef SATP_MODE_SV32
-#define VPN2_BITS   (9)
-#define VPN1_BITS   (9)
-#define VPN0_BITS   (9)
-#else
-#define VPN1_BITS   (9)
-#define VPN0_BITS   (9)
-#endif
-
+#define VPN_BITS    (9)
 #define OFFSET_BITS (12)
 
 #ifdef CONFIG_RISCV_64
 
-/* SLOT2_ENTRY_BITS == 30 */
-#define SLOT2_ENTRY_BITS  (VPN1_BITS + VPN2_BITS + OFFSET_BITS)
-#define SLOT2(slot)       (_AT(vaddr_t,slot) << SLOT2_ENTRY_BITS)
-#define SLOT2_ENTRY_SIZE  SLOT2(1)
+#define MAX_XEN_SIZE            MB(2)
+#define MAX_FDT_SIZE_           MB(4)
+#define MAX_FIXMAP_SIZE         MB(2)
 
-#define MAX_XEN_SIZE      MB(2)
-#define MAX_FDT_SIZE_     MB(4)
-#define MAX_FIXMAP_SIZE   MB(2)
+#define SLOTN_ENTRY_BITS        (HYP_PT_ROOT_LEVEL * VPN_BITS + OFFSET_BITS)
+#define SLOTN(slot)             (_AT(vaddr_t,slot) << SLOTN_ENTRY_BITS)
+#define SLOTN_ENTRY_SIZE        SLOTN(1)
 
-#define XEN_VIRT_START    (0xFFFFFFFFC0000000) /* (_AC(-1, UL) + 1 - GB(1)) */
+#define XEN_VIRT_START          (0xFFFFFFFFC0000000) /* (_AC(-1, UL) + 1 - GB(1)) */
 
 #define FDT_VIRT_START          (XEN_VIRT_START + MAX_XEN_SIZE)
 
 #define FIXMAP_BASE             (FDT_VIRT_START + MAX_FDT_SIZE_)
 #define FIXMAP_ADDR(n)          (FIXMAP_BASE + (n) * PAGE_SIZE)
 
-#define DIRECTMAP_SIZE          (SLOT2_ENTRY_SIZE * (509-200))
+#define DIRECTMAP_SIZE          (SLOTN_ENTRY_SIZE * (509-200))
 #define DIRECTMAP_VIRT_END      (DIRECTMAP_VIRT_START + DIRECTMAP_SIZE - 1)
 #define XENHEAP_VIRT_START      directmap_virt_start
-#define DIRECTMAP_VIRT_START    SLOT2(200)
+#define DIRECTMAP_VIRT_START    SLOTN(200)
 
-#define FRAMETABLE_VIRT_START   SLOT2(196)
+#define FRAMETABLE_VIRT_START   SLOTN(196)
 #define FRAMETABLE_SIZE         GB(3)
 #define FRAMETABLE_NR           (FRAMETABLE_SIZE / sizeof(*frame_table))
 #define FRAMETABLE_VIRT_END     (FRAMETABLE_VIRT_START + FRAMETABLE_SIZE - 1)
 
-#define VMAP_VIRT_START         SLOT2(194)
+#define VMAP_VIRT_START         SLOTN(194)
 #define VMAP_VIRT_SIZE          GB(1)
 
 #else
