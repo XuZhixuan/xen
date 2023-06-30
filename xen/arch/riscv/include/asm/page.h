@@ -127,6 +127,14 @@ typedef struct {
     unsigned long rsw2:7;
     unsigned long pbmt:2;
     unsigned long n:1;
+#elif RV_STAGE1_MODE == SATP_MODE_SV48
+    unsigned long ppn0:9;
+    unsigned long ppn1:9;
+    unsigned long ppn2:9;
+    unsigned long ppn3:17;
+    unsigned long rsw2:7;
+    unsigned long pbmt:2;
+    unsigned long n:1;
 #else
 #error "Add proper bits for SATP_MODE"
 #endif
