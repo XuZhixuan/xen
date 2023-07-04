@@ -144,6 +144,9 @@ mfn_t p2m_lookup(struct domain *d, gfn_t gfn, p2m_type_t *t);
 void p2m_save_state(struct vcpu *p);
 void p2m_restore_state(struct vcpu *n);
 
+int p2m_set_allocation(struct domain *d, unsigned long pages, bool *preempted);
+int p2m_teardown_allocation(struct domain *d);
+
 #endif /* _XEN_P2M_H */
 
 /*

@@ -1,5 +1,6 @@
 #include <xen/bug.h>
 #include <xen/domain_page.h>
+#include <xen/event.h>
 #include <xen/lib.h>
 #include <xen/rwlock.h>
 #include <xen/sched.h>
@@ -156,7 +157,9 @@ int p2m_init(struct domain *d)
         return rc;
 
     rwlock_init(&p2m->lock);
+    spin_lock_init(&d->arch.paging.lock);
     INIT_PAGE_LIST_HEAD(&p2m->pages);
+    INIT_PAGE_LIST_HEAD(&d->arch.paging.p2m_freelist);
 
     return 0;
 }
@@ -248,5 +251,83 @@ void p2m_restore_state(struct vcpu *n)
     }
 
     n->arch.hgatp = p2m->hgatp;
+}
+
+/*
+ * Set the pool of pages to the required number of pages.
+ * Returns 0 for success, non-zero for failure.
+ * Call with d->arch.paging.lock held.
+ */
+int p2m_set_allocation(struct domain *d, unsigned long pages, bool *preempted)
+{
+    struct page_info *pg;
+
+    ASSERT(spin_is_locked(&d->arch.paging.lock));
+
+    for ( ; ; )
+    {
+        if ( d->arch.paging.p2m_total_pages < pages )
+        {
+            /* Need to allocate more memory from domheap */
+            pg = alloc_domheap_page(NULL, 0);
+            if ( pg == NULL )
+            {
+                printk(XENLOG_ERR "Failed to allocate P2M pages.\n");
+                return -ENOMEM;
+            }
+            ACCESS_ONCE(d->arch.paging.p2m_total_pages) =
+                d->arch.paging.p2m_total_pages + 1;
+            page_list_add_tail(pg, &d->arch.paging.p2m_freelist);
+        }
+        else if ( d->arch.paging.p2m_total_pages > pages )
+        {
+            /* Need to return memory to domheap */
+            pg = page_list_remove_head(&d->arch.paging.p2m_freelist);
+            if( pg )
+            {
+                ACCESS_ONCE(d->arch.paging.p2m_total_pages) =
+                    d->arch.paging.p2m_total_pages - 1;
+                free_domheap_page(pg);
+            }
+            else
+            {
+                printk(XENLOG_ERR
+                       "Failed to free P2M pages, P2M freelist is empty.\n");
+                return -ENOMEM;
+            }
+        }
+        else
+            break;
+
+        /* Check to see if we need to yield and try again */
+        if ( preempted && general_preempt_check() )
+        {
+            *preempted = true;
+            return -ERESTART;
+        }
+    }
+
+    return 0;
+}
+
+int p2m_teardown_allocation(struct domain *d)
+{
+    int ret = 0;
+    bool preempted = false;
+
+    spin_lock(&d->arch.paging.lock);
+    if ( d->arch.paging.p2m_total_pages != 0 )
+    {
+        ret = p2m_set_allocation(d, 0, &preempted);
+        if ( preempted )
+        {
+            spin_unlock(&d->arch.paging.lock);
+            return -ERESTART;
+        }
+        ASSERT(d->arch.paging.p2m_total_pages == 0);
+    }
+    spin_unlock(&d->arch.paging.lock);
+
+    return ret;
 }
 

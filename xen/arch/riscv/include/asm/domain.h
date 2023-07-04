@@ -34,6 +34,14 @@ struct vtimer {
     struct timer timer;
 };
 
+struct paging_domain {
+    spinlock_t lock;
+    /* Free P2M pages from the pre-allocated P2M pool */
+    struct page_list_head p2m_freelist;
+    /* Number of pages from the pre-allocated P2M pool */
+    unsigned long p2m_total_pages;
+};
+
 struct arch_domain
 {
 #ifdef CONFIG_RISCV_64
@@ -43,6 +51,8 @@ struct arch_domain
     struct p2m_domain p2m;
 
     struct hvm_domain hvm;
+
+    struct paging_domain paging;
 
 }  __cacheline_aligned;
 
