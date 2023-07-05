@@ -29,8 +29,6 @@ unsigned long copy_to_guest_phys(struct domain *d,
     uint64_t addr = gpa;
     unsigned offset = addr & ~PAGE_MASK;
 
-    /* This function may not yet be designed for non-dom0 domains */
-    BUG_ON( d->domain_id != 0 );
     BUILD_BUG_ON((sizeof(addr)) < sizeof(vaddr_t));
     BUILD_BUG_ON((sizeof(addr)) < sizeof(paddr_t));
 

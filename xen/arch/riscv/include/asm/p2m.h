@@ -147,6 +147,15 @@ void p2m_restore_state(struct vcpu *n);
 int p2m_set_allocation(struct domain *d, unsigned long pages, bool *preempted);
 int p2m_teardown_allocation(struct domain *d);
 
+static inline int guest_physmap_add_pages(struct domain *d,
+                                          gfn_t gfn,
+                                          mfn_t mfn,
+                                          unsigned int nr_pages)
+{
+    printk("need to be implemented\n");
+    return -EINVAL;
+}
+
 #endif /* _XEN_P2M_H */
 
 /*

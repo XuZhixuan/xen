@@ -231,6 +231,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     else
         printk(XENLOG_INFO "Xen dom0less mode detected\n");
 
+    create_domUs();
+
     early_printk("All set up\n");
 
     system_state = SYS_STATE_active;

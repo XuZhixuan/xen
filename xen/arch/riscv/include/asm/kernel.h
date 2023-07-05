@@ -10,6 +10,25 @@
 #include <xen/bootfdt.h>
 #include <xen/setup.h>
 
+/*
+ * List of possible features for dom0less domUs
+ *
+ * DOM0LESS_ENHANCED_NO_XS: Notify the OS it is running on top of Xen. All the
+ *                          default features (excluding Xenstore) will be
+ *                          available. Note that an OS *must* not rely on the
+ *                          availability of Xen features if this is not set.
+ * DOM0LESS_XENSTORE:       Xenstore will be enabled for the VM. This feature
+ *                          can't be enabled without the
+ *                          DOM0LESS_ENHANCED_NO_XS.
+ * DOM0LESS_ENHANCED:       Notify the OS it is running on top of Xen. All the
+ *                          default features (including Xenstore) will be
+ *                          available. Note that an OS *must* not rely on the
+ *                          availability of Xen features if this is not set.
+ */
+#define DOM0LESS_ENHANCED_NO_XS  BIT(0, U)
+#define DOM0LESS_XENSTORE        BIT(1, U)
+#define DOM0LESS_ENHANCED        (DOM0LESS_ENHANCED_NO_XS | DOM0LESS_XENSTORE)
+
 struct kernel_info {
 #ifdef CONFIG_RISCV_64
     enum domain_type type;
@@ -32,6 +51,9 @@ struct kernel_info {
     const char* cmdline;
     paddr_t dtb_paddr;
     paddr_t initrd_paddr;
+
+    /* Enable/Disable PV drivers interfaces */
+    uint16_t dom0less_feature;
 
     /* loader to use for this kernel */
     void (*load)(struct kernel_info *info);
