@@ -58,7 +58,11 @@ static struct ns16550 {
     struct timer timer;
     struct timer resume_timer;
     unsigned int timeout_ms;
-    bool_t intr_works;
+    enum {
+        intr_off,
+        intr_on,
+        polling,
+    } intr_works;
     bool_t dw_usr_bsy;
 #ifdef NS16550_PCI
     /* PCI card parameters. */
@@ -111,6 +115,19 @@ struct ns16550_config_param {
 
 static void enable_exar_enhanced_bits(const struct ns16550 *uart);
 #endif
+
+/*
+ * Configure serial port with a string:
+ *   <baud>[/<base_baud>][,DPS[,<io-base>[,<irq>|msi|poll[,<port-bdf>[,<bridge-bdf>]]]]].
+ * The tail of the string can be omitted if platform defaults are sufficient.
+ * If the baud rate is pre-configured, perhaps by a bootloader, then 'auto'
+ * can be specified in place of a numeric baud rate. Polled mode is specified
+ * by poll property.
+ */
+static char __initdata opt_com1[128] = "";
+static char __initdata opt_com2[128] = "";
+string_param("com1", opt_com1);
+string_param("com2", opt_com2);
 
 static void cf_check ns16550_delayed_resume(void *data);
 
@@ -181,7 +198,7 @@ static void cf_check ns16550_interrupt(
     struct serial_port *port = dev_id;
     struct ns16550 *uart = port->uart;
 
-    uart->intr_works = 1;
+    uart->intr_works = intr_on;
 
     while ( !(ns_read_reg(uart, UART_IIR) & UART_IIR_NOINT) )
     {
@@ -212,7 +229,7 @@ static void cf_check __ns16550_poll(struct cpu_user_regs *regs)
     struct serial_port *port = this_cpu(poll_port);
     struct ns16550 *uart = port->uart;
 
-    if ( uart->intr_works )
+    if ( uart->intr_works == intr_on )
         return; /* Interrupts work - no more polling */
 
     while ( ns_read_reg(uart, UART_LSR) & UART_LSR_DR )
@@ -305,7 +322,8 @@ static void ns16550_setup_preirq(struct ns16550 *uart)
     unsigned char lcr;
     unsigned int  divisor;
 
-    uart->intr_works = 0;
+    if ( uart->intr_works != polling )
+        uart->intr_works = intr_off;
 
     pci_serial_early_init(uart);
 
@@ -394,7 +412,7 @@ static void __init cf_check ns16550_init_irq(struct serial_port *port)
 
 static void ns16550_setup_postirq(struct ns16550 *uart)
 {
-    if ( uart->irq > 0 )
+    if ( uart->intr_works != polling )
     {
         /* Master interrupt enable; also keep DTR/RTS asserted. */
         ns_write_reg(uart,
@@ -473,6 +491,7 @@ static void __init cf_check ns16550_init_postirq(struct serial_port *port)
                 if ( rc )
                 {
                     uart->irq = 0;
+                    uart->intr_works = polling;
                     if ( msi_desc )
                         msi_free_irq(msi_desc);
                     else
@@ -488,7 +507,7 @@ static void __init cf_check ns16550_init_postirq(struct serial_port *port)
     }
 #endif
 
-    if ( uart->irq > 0 )
+    if ( uart->intr_works != polling )
     {
         uart->irqaction.handler = ns16550_interrupt;
         uart->irqaction.name    = "ns16550";
@@ -595,7 +614,8 @@ static void __init cf_check ns16550_endboot(struct serial_port *port)
 static int __init cf_check ns16550_irq(struct serial_port *port)
 {
     struct ns16550 *uart = port->uart;
-    return ((uart->irq > 0) ? uart->irq : -1);
+
+    return ((uart->intr_works != polling) ? uart->irq : -1);
 }
 
 static void cf_check ns16550_start_tx(struct serial_port *port)
@@ -1333,9 +1353,13 @@ pci_uart_config(struct ns16550 *uart, bool_t skip_amt, unsigned int idx)
                     uart->irq = 0;
 #endif
                 if ( !uart->irq )
+                {
+                    uart->intr_works = polling;
+
                     printk(XENLOG_INFO
                            "ns16550: %pp: no legacy IRQ, using poll mode\n",
                            &PCI_SBDF(0, b, d, f));
+                }
 
                 return 0;
             }
@@ -1373,19 +1397,6 @@ static void enable_exar_enhanced_bits(const struct ns16550 *uart)
 }
 
 #endif /* CONFIG_HAS_PCI */
-
-/*
- * Configure serial port with a string:
- *   <baud>[/<base_baud>][,DPS[,<io-base>[,<irq>[,<port-bdf>[,<bridge-bdf>]]]]].
- * The tail of the string can be omitted if platform defaults are sufficient.
- * If the baud rate is pre-configured, perhaps by a bootloader, then 'auto'
- * can be specified in place of a numeric baud rate. Polled mode is specified
- * by requesting irq 0.
- */
-static char __initdata opt_com1[128] = "";
-static char __initdata opt_com2[128] = "";
-string_param("com1", opt_com1);
-string_param("com2", opt_com2);
 
 enum serial_param_type {
     baud,
@@ -1555,6 +1566,12 @@ static bool __init parse_positional(struct ns16550 *uart, char **str)
         }
         else
 #endif
+        if ( strncmp(conf, "poll", 4) == 0 )
+        {
+            uart->intr_works = polling;
+            conf += 4;
+        }
+        else
             uart->irq = simple_strtol(conf, &conf, 10);
     }
 
@@ -1615,7 +1632,19 @@ static bool __init parse_namevalue_pairs(char *str, struct ns16550 *uart)
             break;
 
         case irq:
-            uart->irq = simple_strtoul(param_value, NULL, 0);
+#ifdef CONFIG_HAS_PCI
+            if ( strncmp(param_value, "msi", 3) == 0 )
+            {
+                uart->msi = true;
+                uart->irq = 0;
+            }
+            else
+#endif
+            if ( strncmp(param_value, "poll", 4) == 0 )
+                uart->intr_works = polling;
+            else
+                uart->irq = simple_strtoul(param_value, NULL, 0);
+
             break;
 
         case data_bits:
@@ -1760,6 +1789,9 @@ static int __init ns16550_uart_dt_init(struct dt_device_node *dev,
 
     ns16550_init_common(uart);
 
+    if ( !strncmp(opt_com1, "poll", 4) )
+        uart->intr_works = polling;
+
     uart->baud      = BAUD_AUTO;
     uart->data_bits = 8;
     uart->parity    = UART_PARITY_NONE;
@@ -1791,9 +1823,13 @@ static int __init ns16550_uart_dt_init(struct dt_device_node *dev,
     }
 
     res = platform_get_irq(dev, 0);
-    if ( ! res )
-        return -EINVAL;
-    uart->irq = res;
+    if ( res < 0 )
+    {
+        printk("there is no interrupt property, polling will be used\n");
+        uart->intr_works = polling;
+    }
+    else
+        uart->irq = res;
 
     uart->dw_usr_bsy = dt_device_is_compatible(dev, "snps,dw-apb-uart");
 

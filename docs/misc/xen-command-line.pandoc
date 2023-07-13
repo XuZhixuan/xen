@@ -331,9 +331,12 @@ Interrupts.  Specifying zero disables CMCI handling.
 Flag to indicate whether to probe for a CMOS Real Time Clock irrespective of
 ACPI indicating none to be there.
 
+### com1 (device tree based initialization)
+> `= [poll]`
+
 ### com1 (x86)
 ### com2 (x86)
-> `= <baud>[/<base-baud>][,[DPS][,[<io-base>|pci|amt][,[<irq>|msi][,[<port-bdf>][,[<bridge-bdf>]]]]]]`
+> `= <baud>[/<base-baud>][,[DPS][,[<io-base>|pci|amt][,[<irq>|msi|poll][,[<port-bdf>][,[<bridge-bdf>]]]]]]`
 
 Both option `com1` and `com2` follow the same format.
 
@@ -353,7 +356,7 @@ Both option `com1` and `com2` follow the same format.
   * `S` is an integer 1 or 2 for the number of stop bits.
 * `<io-base>` is an integer which specifies the IO base port for UART
   registers.
-* `<irq>` is the IRQ number to use, or `0` to use the UART in poll
+* `<irq>` is the IRQ number to use, or `poll` to use the UART in poll
   mode only, or `msi` to set up a Message Signaled Interrupt.
 * `<port-bdf>` is the PCI location of the UART, in
   `<bus>:<device>.<function>` notation.
@@ -391,7 +394,8 @@ The accepted name keywords for name=value pairs are:
           is used to specify if the serial device is pci-based. The io_base
           cannot be specified when `dev=pci` or `dev=amt` is used.
 * `io-base` - accepts integer which specified IO base port for UART registers
-* `irq` - IRQ number to use
+* `irq` - IRQ number to use, or `poll` to use the UART in poll mode only,
+          or `msi` to set up a Message Signaled Interrupt.
 * `parity` - accepted values are same as positional parameters
 * `port` - Used to specify which port the PCI serial device is located on
            Notation is xx:xx.x `<bus>:<device>.<function>`
