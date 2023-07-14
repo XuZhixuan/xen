@@ -20,6 +20,7 @@
 #include <asm/traps.h>
 #include <asm/vplic.h>
 #include <asm/vtimer.h>
+#include <asm/vsbi_uart.h>
 
 #define cast_to_bug_frame(addr) \
     (const struct bug_frame *)(addr)
@@ -412,17 +413,6 @@ static void guest_sbi_set_timer(struct cpu_user_regs *regs)
     regs->a0 = 0;
 }
 
-static void guest_sbi_putchar(struct cpu_user_regs *regs)
-{
-    sbi_console_putchar((int)regs->a0);
-    regs->a0 = 0;
-}
-
-static void guest_sbi_getchar(struct cpu_user_regs *regs)
-{
-    regs->a0 = sbi_console_getchar();
-}
-
 static void guest_sbi_ext_base(struct cpu_user_regs *regs)
 {
     unsigned long fid = regs->a6;
@@ -504,10 +494,10 @@ static void handle_guest_sbi(struct cpu_user_regs *regs)
         guest_sbi_set_timer(regs);
         break;
     case SBI_EXT_0_1_CONSOLE_PUTCHAR:
-        guest_sbi_putchar(regs);
+        vsbi_uart_putchar(regs);
         break;
     case SBI_EXT_0_1_CONSOLE_GETCHAR:
-        guest_sbi_getchar(regs);
+        vsbi_uart_getchar(regs);
         break;
     case SBI_EXT_0_1_CLEAR_IPI:
         printk("%s:%d: unimplemented: SBI_EXT_0_1_CLEAR_IPI\n",

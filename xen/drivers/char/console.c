@@ -42,6 +42,10 @@
 #include <asm/vpl011.h>
 #endif
 
+#ifdef CONFIG_RISCV_64
+#include <asm/vsbi_uart.h>
+#endif
+
 /* console: comma-separated list of console outputs. */
 static char __initdata opt_console[30] = OPT_CONSOLE_STR;
 string_param("console", opt_console);
@@ -518,6 +522,18 @@ static void switch_serial_input(void)
     printk("\n");
 }
 
+#ifdef CONFIG_RISCV_64
+unsigned long get_cons_ring_char(void)
+{
+    unsigned long c = -1UL;
+
+    if ( serial_rx_cons != serial_rx_prod )
+        c = (unsigned long) serial_rx_ring[SERIAL_RX_MASK(serial_rx_cons++)];
+
+    return c;
+}
+#endif
+
 static void __serial_rx(char c, struct cpu_user_regs *regs)
 {
     switch ( console_rx )
@@ -539,6 +555,23 @@ static void __serial_rx(char c, struct cpu_user_regs *regs)
          */
         send_global_virq(VIRQ_CONSOLE);
         break;
+#ifdef CONFIG_RISCV_64
+    default:
+    {
+        struct domain *d = rcu_lock_domain_by_id(console_rx - 1);
+
+        if ( d != NULL &&
+             !d->arch.vsbi_uart.backend_in_domain &&
+             d->arch.vsbi_uart.backend.xen != NULL )
+            vsbi_uart_rx_char_xen(d, c);
+        else
+            printk("Cannot send chars to Dom%d: no UART available\n",
+                   console_rx - 1);
+
+        if ( d != NULL )
+            rcu_unlock_domain(d);
+    }
+#endif
 
 #ifdef CONFIG_SBSA_VUART_CONSOLE
     default:

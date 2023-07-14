@@ -52,6 +52,9 @@ struct kernel_info {
     paddr_t dtb_paddr;
     paddr_t initrd_paddr;
 
+    /* Enable virtual uart emulation */
+    bool vsbi_uart;
+
     /* Enable/Disable PV drivers interfaces */
     uint16_t dom0less_feature;
 

@@ -6,6 +6,7 @@
 #include <xen/timer.h>
 
 #include <asm/p2m.h>
+#include <asm/vsbi_uart.h>
 
 #include <public/hvm/params.h>
 
@@ -53,6 +54,8 @@ struct arch_domain
     struct hvm_domain hvm;
 
     struct paging_domain paging;
+
+    struct vsbi_uart vsbi_uart;
 
 }  __cacheline_aligned;
 

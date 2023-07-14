@@ -8,10 +8,12 @@
 #include <xen/device_tree.h>
 #include <xen/domain.h>
 #include <xen/init.h>
+#include <xen/keyhandler.h>
 #include <xen/mm.h>
 #include <xen/percpu.h>
 #include <xen/rcupdate.h>
 #include <xen/sched.h>
+#include <xen/serial.h>
 #include <xen/setup.h>
 #include <xen/smp.h>
 #include <xen/tasklet.h>
@@ -201,6 +203,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     scheduler_init();
     set_current(idle_vcpu[0]);
 
+    console_init_postirq();
+
     smp_prepare_cpus();
 
     for_each_present_cpu ( i )
@@ -232,6 +236,11 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
         printk(XENLOG_INFO "Xen dom0less mode detected\n");
 
     create_domUs();
+
+    console_endboot();
+
+    /* Hide UART from DOM0 if we're using it */
+    serial_endboot();
 
     early_printk("All set up\n");
 

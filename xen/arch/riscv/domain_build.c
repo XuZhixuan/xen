@@ -13,6 +13,7 @@
 #include <xen/libfdt/libfdt.h>
 
 #include <asm/kernel.h>
+#include <asm/vsbi_uart.h>
 
 static unsigned int __initdata opt_dom0_max_vcpus;
 integer_param("dom0_max_vcpus", opt_dom0_max_vcpus);
@@ -1521,6 +1522,8 @@ static int __init construct_domU(struct domain *d,
     printk("*** LOADING DOMU cpus=%u memory=%#"PRIx64"KB ***\n",
            d->max_vcpus, mem);
 
+    kinfo.vsbi_uart = dt_property_read_bool(node, "vsbi_uart");
+
     rc = dt_property_read_string(node, "xen,enhanced", &dom0less_enhanced);
     if ( rc == -EILSEQ ||
          rc == -ENODATA ||
@@ -1561,6 +1564,13 @@ static int __init construct_domU(struct domain *d,
     if ( rc < 0 )
         return rc;
 #endif
+
+    if ( kinfo.vsbi_uart )
+    {
+        rc = domain_vsbi_uart_init(d, NULL);
+        if ( rc < 0 )
+            return rc;
+    }
 
     rc = prepare_dtb_domU(d, &kinfo);
     if ( rc < 0 )
