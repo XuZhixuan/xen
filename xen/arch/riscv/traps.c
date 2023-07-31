@@ -475,9 +475,9 @@ static void guest_sbi_rfence(struct cpu_user_regs *regs)
         }
     case SBI_EXT_RFENCE_REMOTE_SFENCE_VMA:
         {
-            printk("SBI_EXT_RFENCE_REMOTE_SFENCE_VMA is unsupported\n");
+            sbi_remote_sfence_vma(&regs->a0, regs->a1, regs->a2);
+            regs->a0 = SBI_SUCCESS;
 
-            regs->a0 = SBI_ERR_NOT_SUPPORTED;
             break;
         }
 
