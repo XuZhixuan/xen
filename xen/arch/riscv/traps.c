@@ -468,9 +468,9 @@ static void guest_sbi_rfence(struct cpu_user_regs *regs)
     {
     case SBI_EXT_RFENCE_REMOTE_FENCE_I:
         {
-            printk("SBI_EXT_RFENCE_REMOTE_FENCE_I is unsupported\n");
+            sbi_remote_fence_i((const unsigned long *)&regs->a0);
+            regs->a0 = SBI_SUCCESS;
 
-            regs->a0 = SBI_ERR_NOT_SUPPORTED;
             break;
         }
     case SBI_EXT_RFENCE_REMOTE_SFENCE_VMA:
