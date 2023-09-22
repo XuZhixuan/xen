@@ -57,10 +57,6 @@ static void schedule_tail(struct vcpu *prev)
 {
     ASSERT(prev != current);
 
-    ctxt_switch_from(prev);
-
-    ctxt_switch_to(current);
-
     local_irq_enable();
 
     sched_context_switched(prev, current);
@@ -76,7 +72,6 @@ void context_switch(struct vcpu *prev, struct vcpu *next)
     ASSERT(local_irq_is_enabled());
     ASSERT(prev != next);
     ASSERT(!vcpu_cpu_dirty(next));
-    ASSERT(is_idle_vcpu(prev) || trap_from_guest);
 
     // update_runstate_area(prev);
 
@@ -86,7 +81,7 @@ void context_switch(struct vcpu *prev, struct vcpu *next)
 
     ctxt_switch_from(prev);
 
-    ctxt_switch_to(current);
+    ctxt_switch_to(next); 
 
     tp->guest_cpu_info = next->arch.cpu_info;
     tp->stack_cpu_regs = &next->arch.cpu_info->guest_cpu_user_regs;
@@ -258,11 +253,62 @@ int arch_vcpu_reset(struct vcpu *v)
     return -ENOSYS;
 }
 
+static void do_idle(void)
+{
+    unsigned int cpu = smp_processor_id();
+
+    rcu_idle_enter(cpu);
+    /* rcu_idle_enter() can raise TIMER_SOFTIRQ. Process it now. */
+    process_pending_softirqs();
+
+    local_irq_disable();
+    if ( cpu_is_haltable(cpu) )
+    {
+        wfi();
+    }
+    local_irq_enable();
+
+    rcu_idle_exit(cpu);
+}
+
+void idle_loop(void)
+{
+    unsigned int cpu = smp_processor_id();
+
+    printk("%s\n", __func__);
+
+    for ( ; ; )
+    {
+        if ( unlikely(tasklet_work_to_do(cpu)) )
+            do_tasklet();
+        else if ( !softirq_pending(cpu) && !scrub_free_pages() &&
+                  !softirq_pending(cpu) )
+            do_idle();
+
+        do_softirq();
+    }
+}
+
+void noreturn startup_cpu_idle_loop(void)
+{
+    struct vcpu *v = current;
+
+    ASSERT(is_idle_vcpu(v));
+
+    reset_stack_and_jump(idle_loop);
+
+    /* This function is noreturn */
+    BUG();
+}
+
 extern void noreturn return_to_new_vcpu64(void);
 
-static void continue_new_vcpu(void)
+static void continue_new_vcpu(struct vcpu *prev)
 {
-    reset_stack_and_jump(return_to_new_vcpu64);
+    if ( is_idle_vcpu(current) )
+        reset_stack_and_jump(idle_loop);
+    else
+        reset_stack_and_jump(return_to_new_vcpu64);
 }
 
 static void vcpu_csr_init(struct vcpu *v)
@@ -352,52 +398,4 @@ void arch_vcpu_destroy(struct vcpu *v)
 struct vcpu *alloc_dom0_vcpu0(struct domain *dom0)
 {
     return vcpu_create(dom0, 0);
-}
-
-static void do_idle(void)
-{
-    unsigned int cpu = smp_processor_id();
-
-    rcu_idle_enter(cpu);
-    /* rcu_idle_enter() can raise TIMER_SOFTIRQ. Process it now. */
-    process_pending_softirqs();
-
-    local_irq_disable();
-    if ( cpu_is_haltable(cpu) )
-    {
-        wfi();
-    }
-    local_irq_enable();
-
-    rcu_idle_exit(cpu);
-}
-
-void idle_loop(void)
-{
-    unsigned int cpu = smp_processor_id();
-
-    printk("%s\n", __func__);
-
-    for ( ; ; )
-    {
-        if ( unlikely(tasklet_work_to_do(cpu)) )
-            do_tasklet();
-        else if ( !softirq_pending(cpu) && !scrub_free_pages() &&
-                  !softirq_pending(cpu) )
-            do_idle();
-
-        do_softirq();
-    }
-}
-
-void noreturn startup_cpu_idle_loop(void)
-{
-    struct vcpu *v = current;
-
-    ASSERT(is_idle_vcpu(v));
-
-    reset_stack_and_jump(idle_loop);
-
-    /* This function is noreturn */
-    BUG();
 }

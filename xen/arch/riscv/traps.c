@@ -283,13 +283,13 @@ void enter_hypervisor_from_guest(void)
     context_save_csrs(current);
 }
 
-static void stay_in_hypervisor(void)
-{
-    local_irq_disable();
+// static void stay_in_hypervisor(void)
+// {
+//     local_irq_disable();
 
-    /* Unset SPV in hstatus */
-    csr_clear(CSR_HSTATUS, HSTATUS_SPV);
-}
+//     /* Unset SPV in hstatus */
+//     csr_clear(CSR_HSTATUS, HSTATUS_SPV);
+// }
 
 static void dump_csrs(unsigned long cause)
 {
@@ -393,8 +393,6 @@ void leave_hypervisor_to_guest(void)
     local_irq_disable();
 
     check_for_pcpu_work();
-
-    context_restore_csrs(current);
 }
 
 void timer_interrupt(unsigned long cause, struct cpu_user_regs *regs)
@@ -709,9 +707,7 @@ void do_trap(struct cpu_user_regs *cpu_regs)
     register_t pc = cpu_regs->sepc;
     unsigned long cause = csr_read(CSR_SCAUSE);
 
-    if ( trap_from_guest )
-        enter_hypervisor_from_guest();
-    else
+    if ( !(cpu_regs->hstatus & HSTATUS_SPV) )
     {
         uint32_t instr = read_instr(pc);
 
@@ -754,10 +750,8 @@ void do_trap(struct cpu_user_regs *cpu_regs)
         }
     }
 
-    if ( trap_from_guest )
+    if ( (cpu_regs->hstatus & HSTATUS_SPV) )
         leave_hypervisor_to_guest();
-    else
-        stay_in_hypervisor();
 }
 
 enum mc_disposition arch_do_multicall_call(struct mc_state *state)
@@ -776,7 +770,3 @@ void vcpu_show_execution_state(struct vcpu *v)
     assert_failed("need to be implented");
 }
 
-unsigned long __trap_from_guest(void)
-{
-    return tp->stack_cpu_regs == &tp->guest_cpu_info->guest_cpu_user_regs;
-}

@@ -52,6 +52,7 @@ void asm_offsets(void)
     OFFSET(CPU_USER_REGS_T6, struct cpu_user_regs, t6);
     OFFSET(CPU_USER_REGS_SEPC, struct cpu_user_regs, sepc);
     OFFSET(CPU_USER_REGS_SSTATUS, struct cpu_user_regs, sstatus);
+    OFFSET(CPU_USER_REGS_HSTATUS, struct cpu_user_regs, hstatus);
     OFFSET(CPU_USER_REGS_PREGS, struct cpu_user_regs, pregs);
     BLANK();
     OFFSET(VCPU_ARCH_SAVED_CONTEXT, struct vcpu, arch.saved_context);

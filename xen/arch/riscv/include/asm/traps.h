@@ -19,10 +19,6 @@ void do_trap(struct cpu_user_regs *cpu_regs);
 void handle_trap(void);
 void trap_init(void);
 
-extern unsigned long __trap_from_guest(void);
-
-#define trap_from_guest __trap_from_guest()
-
 #endif /* __ASSEMBLY__ */
 
 #endif /* __ASM_TRAPS_H__ */

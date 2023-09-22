@@ -132,6 +132,7 @@ void vsbi_uart_getchar(struct cpu_user_regs *regs)
     struct vsbi_uart_xen_backend *intf = vsbi_uart->backend.xen;
     XENCONS_RING_IDX in_cons, in_prod;
 
+
     if ( !intf )
     {
         regs->a0 = (unsigned long)get_cons_ring_char();

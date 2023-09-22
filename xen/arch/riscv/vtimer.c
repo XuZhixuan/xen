@@ -64,6 +64,7 @@ void vtimer_restore(struct vcpu *v)
 void vtimer_set_timer(struct vtimer *t, uint64_t ticks)
 {
     s_time_t expires = ticks_to_ns(ticks - boot_count);
+
     /* clear pending timer interrupt */
     t->v->arch.hvip &= ~MIP_VSTIP;
     set_timer(&t->timer, expires);
