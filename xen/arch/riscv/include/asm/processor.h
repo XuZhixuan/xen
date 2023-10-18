@@ -71,8 +71,6 @@ struct cpu_user_regs
     unsigned long sepc;
     unsigned long sstatus;
     unsigned long hstatus;
-    /* pointer to previous stack_cpu_regs */
-    unsigned long pregs;
 };
 
 void show_registers(const struct cpu_user_regs *regs);

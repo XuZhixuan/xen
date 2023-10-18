@@ -79,19 +79,13 @@ save_context:
         /* Save guest/xen tp. Set sscratch to zero */
         csrrw   tp, CSR_SSCRATCH, tp
         REG_S   tp, CPU_USER_REGS_TP(sp)
-        mv      t0, tp
+
         csrrw   tp, CSR_SSCRATCH, zero
         bnez    tp, continue_save_context
         /* if tp == 0 */
-        mv      tp, t0
+        REG_L   tp, CPU_USER_REGS_TP(sp)
 
 continue_save_context:
-        /* new_stack_cpu_regs.pregs = old_stack_cpu_res */
-        REG_L   t0, PCPU_INFO_STACK_CPU_REGS(tp)
-        REG_S   t0, CPU_USER_REGS_PREGS(sp)
-        /* Update stack_cpu_regs */
-        REG_S   sp, PCPU_INFO_STACK_CPU_REGS(tp)
-
         mv      a0, sp
         jal     do_trap
 
@@ -103,10 +97,6 @@ continue_save_context:
         csrw    CSR_SSCRATCH, tp
 
 restore_registers:
-
-        /* Restore stack_cpu_regs */
-        REG_L   t0, CPU_USER_REGS_PREGS(sp)
-        REG_S   t0, PCPU_INFO_STACK_CPU_REGS(tp)
 
         /* Restore HSSTATUS */
 	REG_L	t0, CPU_USER_REGS_HSTATUS(sp)
@@ -159,9 +149,6 @@ restore_registers:
 /* t0 is used as a temporary reg and is clobbered to oblivion */
 ENTRY(return_to_new_vcpu64)
         //jal     leave_hypervisor_to_guest
-
-        /* Store stack pointer to tp->vcpu->arch.guest_cpu_user_regs.sp */
-        REG_S   sp, PCPU_INFO_GUEST_CPU_INFO(tp)
 
         /* Backup tp into sscratch */
         csrrw    tp, CSR_SSCRATCH, tp

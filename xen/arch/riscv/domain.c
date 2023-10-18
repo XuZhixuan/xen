@@ -84,7 +84,6 @@ void context_switch(struct vcpu *prev, struct vcpu *next)
     ctxt_switch_to(next); 
 
     tp->guest_cpu_info = next->arch.cpu_info;
-    tp->stack_cpu_regs = &next->arch.cpu_info->guest_cpu_user_regs;
 
     prev = __context_switch(prev, next);
 
