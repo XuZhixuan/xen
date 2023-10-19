@@ -4,6 +4,7 @@
 #include <xen/bug.h>
 #include <xen/compile.h>
 #include <xen/console.h>
+#include <xen/cpu.h>
 #include <xen/device_tree.h>
 #include <xen/domain.h>
 #include <xen/init.h>
@@ -80,6 +81,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     size_t fdt_size;
     const char *cmdline;
     struct domain *d;
+    unsigned int i;
 
     /*
      * tp register contains an address of physical cpu information.
@@ -91,8 +93,6 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[bootcpu_id]));
 
     set_processor_id(bootcpu_id);
-
-    remove_identity_mapping();
 
     percpu_init_areas();
 
@@ -170,6 +170,26 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     set_current(idle_vcpu[0]);
 
     smp_prepare_cpus();
+
+    for_each_present_cpu ( i )
+    {
+        if ( (num_online_cpus() < nr_cpu_ids) && !cpu_online(i) )
+        {
+            int ret = cpu_up(i);
+            if ( ret != 0 )
+                printk("Failed to bring up CPU %u (error %d)\n", i, ret);
+        }
+    }
+
+    /*
+     * identity mapping should be removed after bring up CPUs as there is
+     * a part of code in head.S ( secondary_start_sbi() ) which requires to
+     * have 1:1 mapping ( to switch from 1:1 mapping world, look at
+     * relocate_enable_mmu() in head.S ).
+     */
+    remove_identity_mapping();
+
+    printk("Brought up %ld CPUs\n", (long)num_online_cpus());
 
     do_initcalls();
 

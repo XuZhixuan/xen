@@ -1,13 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Dummy smpboot support */
 
 #include <xen/bug.h>
 #include <xen/cpu.h>
 #include <xen/cpumask.h>
 #include <xen/device_tree.h>
 #include <xen/init.h>
+#include <xen/sched.h>
 #include <xen/smp.h>
+#include <xen/softirq.h>
 #include <xen/nodemask.h>
+
+#include <asm/early_printk.h>
+#include <asm/plic.h>
+#include <asm/sbi.h>
+#include <asm/traps.h>
 
 cpumask_t cpu_online_map;
 cpumask_t cpu_present_map;
@@ -24,10 +30,49 @@ unsigned long __cpuid_to_hartid_map[NR_CPUS] __ro_after_init = {
     [0 ... NR_CPUS-1] = INVALID_HARTID
 };
 
+static unsigned char __initdata cpu_stack[STACK_SIZE * NR_CPUS]
+    __aligned(STACK_SIZE);
+
+extern char secondary_start_sbi[];
+
 int __cpu_up(unsigned int cpu)
 {
-    assert_failed("need to be implemented\n");
-    return 0;
+    unsigned long boot_addr = LINK_TO_LOAD(secondary_start_sbi);
+    unsigned long hartid = cpuid_to_hartid_map(cpu);
+    unsigned long hsm_data = LINK_TO_LOAD(&cpu_stack[STACK_SIZE * cpu]);
+    int ret = 0;
+    s_time_t deadline;
+
+    printk("CPU%ld boot addr: 0x%lx, stack addr: 0x%lx\n",
+           hartid, boot_addr, hsm_data);
+
+    ret = sbi_hsm_hart_start(hartid, boot_addr, hsm_data);
+    if ( !ret )
+    {
+        deadline = NOW() + MILLISECS(1000);
+
+        while ( !cpu_online(cpu) && NOW() < deadline )
+        {
+            cpu_relax();
+            process_pending_softirqs();
+        }
+
+        /*
+          * Ensure that other cpus' initializations are visible before
+          * proceeding. Corresponds to smp_wmb() in start_secondary.
+          */
+        smp_rmb();
+
+        if ( !cpu_online(cpu) )
+        {
+            printk("CPU%d never came online\n", cpu);
+            return -EIO;
+        }
+    }
+    else
+        printk("CPU%d: failed to start\n", cpu);
+
+    return ret;
 }
 
 /* Shut down the current CPU */
@@ -204,4 +249,50 @@ void __init smp_prepare_cpus(void)
 void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)
 {
     cpuid_to_hartid_map(0) = boot_cpu_hartid;
+}
+
+/*
+ * C entry point for a secondary processor.
+ */
+void __init smp_callin(unsigned int cpuid)
+{
+    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[cpuid]));
+
+    set_processor_id(cpuid);
+
+    trap_init();
+
+    /* gic_init_secondary_cpu(); */
+
+    set_current(idle_vcpu[cpuid]);
+
+    /* Run local notifiers */
+    notify_cpu_starting(cpuid);
+
+    /*
+     * Ensure that previous writes are visible before marking the cpu as
+     * online.
+     */
+    smp_wmb();
+
+    /* Now report this CPU is up */
+    cpumask_set_cpu(cpuid, &cpu_online_map);
+
+    local_irq_enable();
+
+    /*
+     * Calling request_irq() after local_irq_enable() on secondary cores
+     * will make sure the assertion condition in alloc_xenheap_pages(),
+     * i.e. !in_irq && local_irq_enabled() is satisfied.
+     */
+
+    init_timer_interrupt();
+
+    printk(XENLOG_DEBUG "CPU %u booted.\n", smp_processor_id());
+
+    /* Enable floating point and other extensions for guest. */
+    csr_clear(CSR_SSTATUS, SSTATUS_FS | SSTATUS_XS);
+    csr_set(CSR_SSTATUS, SSTATUS_FS_INITIAL | SSTATUS_XS_INITIAL);
+
+    startup_cpu_idle_loop();
 }

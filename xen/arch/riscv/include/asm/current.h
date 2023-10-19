@@ -29,6 +29,11 @@ struct cpu_info {
     struct cpu_user_regs guest_cpu_user_regs;
 };
 
+/*
+ * TODO: should be reworked! instead of using stack for cpu_info purposes
+ *       tp register would be more proper way to implement get cpu info
+ *       in RISC-V.
+ */
 static inline struct cpu_info *get_cpu_info(void)
 {
 #ifdef __clang__
