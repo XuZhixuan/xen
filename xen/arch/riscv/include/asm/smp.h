@@ -52,4 +52,6 @@ void smp_setup_processor_id(unsigned long boot_cpu_hartid);
 extern unsigned long __cpuid_to_hartid_map[NR_CPUS];
 #define cpuid_to_hartid_map(cpu) __cpuid_to_hartid_map[cpu]
 
+#define cpu_physical_id(cpu) cpuid_to_hartid_map(cpu)
+
 #endif /* _ASM_RISCV_SMP_H */
