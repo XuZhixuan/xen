@@ -3,6 +3,7 @@
 #include <xen/lib.h>
 
 #include <asm/processor.h>
+#include <asm/sbi.h>
 
 /* tp points to one of these per cpu */
 struct pcpu_info pcpu_info[NR_CPUS];
@@ -18,6 +19,13 @@ void arch_flush_tlb_mask(const cpumask_t *mask)
  */
 void smp_send_event_check_mask(const cpumask_t *mask)
 {
+    struct cpumask tmask;
+    unsigned long *hart_mask;
+
+    sbi_cpumask_to_hartmask(mask, &tmask);
+    hart_mask = cpumask_bits(&tmask);
+
+    sbi_send_ipi(hart_mask);
 }
 
 void smp_send_call_function_mask(const cpumask_t *mask)
