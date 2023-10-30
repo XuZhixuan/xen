@@ -124,9 +124,9 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
      * <asm/processor.h> ):
      *   #define get_processor_id()    (tp->processor_id)
      */
-    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[bootcpu_id]));
+    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[0]));
 
-    set_processor_id(bootcpu_id);
+    set_processor_id(0);
 
     percpu_init_areas();
 

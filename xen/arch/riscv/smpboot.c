@@ -206,6 +206,7 @@ void __init smp_init_cpus(void)
         }
 
         cpuid_to_hartid_map(cpuid) = hart;
+
         cpuid++;
     }
 
@@ -256,18 +257,23 @@ void __init smp_setup_processor_id(unsigned long boot_cpu_hartid)
  */
 void __init smp_callin(unsigned int cpuid)
 {
-    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[cpuid]));
+    unsigned int hcpu = 1;
 
-    set_processor_id(cpuid);
+    for ( ; (hcpu < NR_CPUS) && (cpuid_to_hartid_map(hcpu) != cpuid); hcpu++)
+    {}
+
+    asm volatile ("mv tp, %0" : : "r"((unsigned long)&pcpu_info[hcpu]));
+
+    set_processor_id(hcpu);
 
     trap_init();
 
     /* gic_init_secondary_cpu(); */
 
-    set_current(idle_vcpu[cpuid]);
+    set_current(idle_vcpu[hcpu]);
 
     /* Run local notifiers */
-    notify_cpu_starting(cpuid);
+    notify_cpu_starting(hcpu);
 
     /*
      * Ensure that previous writes are visible before marking the cpu as
@@ -276,7 +282,7 @@ void __init smp_callin(unsigned int cpuid)
     smp_wmb();
 
     /* Now report this CPU is up */
-    cpumask_set_cpu(cpuid, &cpu_online_map);
+    cpumask_set_cpu(hcpu, &cpu_online_map);
 
     local_irq_enable();
 
