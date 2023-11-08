@@ -29,23 +29,10 @@ struct cpu_info {
     struct cpu_user_regs guest_cpu_user_regs;
 };
 
-/*
- * TODO: should be reworked! instead of using stack for cpu_info purposes
- *       tp register would be more proper way to implement get cpu info
- *       in RISC-V.
- */
 static inline struct cpu_info *get_cpu_info(void)
 {
-#ifdef __clang__
-    unsigned long sp;
-
-    asm ("mov %0, sp" : "=r" (sp));
-#else
-    register unsigned long sp asm ("sp");
-#endif
-
-    return (struct cpu_info *)((sp & ~(STACK_SIZE - 1)) +
-                               STACK_SIZE - sizeof(struct cpu_info));
+    /* guest_cpu_info also points to the top of the stack. */
+    return tp->guest_cpu_info;
 }
 
 #define guest_cpu_user_regs() (&get_cpu_info()->guest_cpu_user_regs)

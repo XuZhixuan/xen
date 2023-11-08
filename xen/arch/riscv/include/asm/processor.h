@@ -18,8 +18,9 @@ struct pcpu_info {
     unsigned long processor_id;
     /* cpu_info of the guest. Always on the top of the stack. */
     struct cpu_info *guest_cpu_info;
-    /* CPU registers of the current trap. Differ from guest_cpu_info if trapped from xen. */
-    struct cpu_user_regs *stack_cpu_regs;
+
+    unsigned long hsp;
+    unsigned long gsp;
 
     /* temporary variable to be used during save/restore of vcpu regs */
     unsigned long tmp;

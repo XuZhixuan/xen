@@ -71,9 +71,9 @@ void asm_offsets(void)
     OFFSET(VCPU_SAVED_CONTEXT_GP, struct arch_vcpu, saved_context.gp);
     OFFSET(VCPU_SAVED_CONTEXT_RA, struct arch_vcpu, saved_context.ra);
     BLANK();
-    OFFSET(PCPU_INFO_GUEST_CPU_INFO, struct pcpu_info, guest_cpu_info);
+    OFFSET(PCPU_INFO_HYPERVISOR_SP, struct pcpu_info, hsp);
+    OFFSET(PCPU_INFO_GUEST_SP, struct pcpu_info, gsp);
     OFFSET(PCPU_INFO_TMP, struct pcpu_info, tmp);
-    OFFSET(PCPU_INFO_STACK_CPU_REGS, struct pcpu_info, stack_cpu_regs);
     BLANK();
     DEFINE(CPU_INFO_SIZE, sizeof(struct cpu_info));
 }

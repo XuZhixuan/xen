@@ -15,33 +15,22 @@ ENTRY(handle_trap)
         csrrw   tp, CSR_SSCRATCH, tp
 
         /* Based on Linux kenrel arch/riscv/entry.S */
-        bnez    tp, save_to_cpuinfo
+        bnez    tp, .L_save_context
 
-    /* Exceptions from xen */
-save_to_stack:
-        /* Save context to stack */
-        REG_S   sp, (CPU_USER_REGS_SP - CPU_USER_REGS_SIZE) (sp)
-        addi    sp, sp, -CPU_USER_REGS_SIZE
-        REG_S   t0, CPU_USER_REGS_T0(sp)
-        j       save_context
+.L_restore_kernel_tpsp:
+        csrr    tp, CSR_SSCRATCH
+        REG_S   sp, PCPU_INFO_HYPERVISOR_SP(tp)
 
-        /* Exceptions from guest */
-    save_to_cpuinfo:
-        /* tp->tmp = sp */
-        REG_S   sp, PCPU_INFO_TMP(tp)
+.L_save_context:
+        REG_S   sp, PCPU_INFO_GUEST_SP(tp)
+        REG_L   sp, PCPU_INFO_HYPERVISOR_SP(tp)
+        addi    sp, sp, -(CPU_INFO_SIZE)
 
-        /* sp = ((struct pcpu_info*)tp)->guest_cpu_info */
-        REG_L   sp, PCPU_INFO_GUEST_CPU_INFO(tp)
-
-        /* sp->guest_cpu_info->sp = tp->tmp */
-        REG_S   t0, CPU_USER_REGS_T0(sp)
-        REG_L   t0, PCPU_INFO_TMP(tp)
-        REG_S   t0, CPU_USER_REGS_SP(sp)
-
-save_context:
         /* Save registers */
         REG_S   ra, CPU_USER_REGS_RA(sp)
         REG_S   gp, CPU_USER_REGS_GP(sp)
+        REG_S   t0, CPU_USER_REGS_T0(sp)
+
         REG_S   t1, CPU_USER_REGS_T1(sp)
         REG_S   t2, CPU_USER_REGS_T2(sp)
         REG_S   s0, CPU_USER_REGS_S0(sp)
@@ -68,39 +57,53 @@ save_context:
         REG_S   t4, CPU_USER_REGS_T4(sp)
         REG_S   t5, CPU_USER_REGS_T5(sp)
         REG_S   t6, CPU_USER_REGS_T6(sp)
-        csrr    t0, CSR_SEPC
-        REG_S   t0, CPU_USER_REGS_SEPC(sp)
-        csrr    t0, CSR_SSTATUS
-        REG_S   t0, CPU_USER_REGS_SSTATUS(sp)
 
-        csrr	t0, CSR_HSTATUS
-	REG_S	t0, CPU_USER_REGS_HSTATUS(sp)
+        REG_L s0, PCPU_INFO_GUEST_SP(tp)
+        csrr s1, CSR_SSTATUS
+        csrr s2, CSR_SEPC
+        csrr s3, CSR_STVAL
+        csrr s4, CSR_SCAUSE
+        csrr s5, CSR_SSCRATCH
+        csrr s6, CSR_HSTATUS
 
-        /* Save guest/xen tp. Set sscratch to zero */
-        csrrw   tp, CSR_SSCRATCH, tp
-        REG_S   tp, CPU_USER_REGS_TP(sp)
+        REG_S s0, CPU_USER_REGS_SP(sp)
+        REG_S s1, CPU_USER_REGS_SSTATUS(sp)
+        REG_S s2, CPU_USER_REGS_SEPC(sp)
 
-        csrrw   tp, CSR_SSCRATCH, zero
-        bnez    tp, continue_save_context
-        /* if tp == 0 */
-        REG_L   tp, CPU_USER_REGS_TP(sp)
+        /* REG_S s3, CPU_USER_REGS_BADADDR(sp) */
+        /* REG_S s4, CPU_USER_REGS_SCAUSE(sp) */
 
-continue_save_context:
+        REG_S s5, CPU_USER_REGS_TP(sp)
+        REG_S s6, CPU_USER_REGS_HSTATUS(sp)
+
+        /*
+         * Set the scratch register to 0, so that if a recursive exception
+         * occurs, the exception vector knows it came from the kernel
+         */
+        csrw    CSR_SSCRATCH, x0
+
         mv      a0, sp
         jal     do_trap
 
         REG_L   t0, CPU_USER_REGS_HSTATUS(sp)
         andi    t0, t0, HSTATUS_SPV
 
-        /* if trapped from guest, save tp */
-        beqz    t0, restore_registers
+        beqz    t0, .L_restore_registers
+
+        /* Save unwound kernel stack pointer in thread_info */
+        addi    s0, sp, CPU_INFO_SIZE
+        REG_S   s0, PCPU_INFO_HYPERVISOR_SP(tp)
+
+        /*
+         * Save TP into the scratch register , so we can find the kernel data
+         * structures again.
+         */
         csrw    CSR_SSCRATCH, tp
 
-restore_registers:
-
+.L_restore_registers:
         /* Restore HSSTATUS */
-	REG_L	t0, CPU_USER_REGS_HSTATUS(sp)
-	csrw	CSR_HSTATUS, t0
+        REG_L	t0, CPU_USER_REGS_HSTATUS(sp)
+        csrw	CSR_HSTATUS, t0
 
         /* Restore stack_cpu_regs */
         REG_L   t0, CPU_USER_REGS_SEPC(sp)
@@ -150,8 +153,10 @@ restore_registers:
 ENTRY(return_to_new_vcpu64)
         //jal     leave_hypervisor_to_guest
 
+        REG_L   sp, PCPU_INFO_HYPERVISOR_SP(tp)
+
         /* Backup tp into sscratch */
-        csrrw    tp, CSR_SSCRATCH, tp
+        csrrw   tp, CSR_SSCRATCH, tp
 
         /* Set vCPU registers */
         REG_L   t0, CPU_USER_REGS_SEPC(sp)

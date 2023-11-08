@@ -706,6 +706,9 @@ void do_trap(struct cpu_user_regs *cpu_regs)
 {
     register_t pc = cpu_regs->sepc;
     unsigned long cause = csr_read(CSR_SCAUSE);
+    struct cpu_user_regs *old_regs = (struct cpu_user_regs *)tp->guest_cpu_info;
+
+    tp->guest_cpu_info = (struct cpu_info *)cpu_regs;
 
     if ( !(cpu_regs->hstatus & HSTATUS_SPV) )
     {
@@ -749,6 +752,8 @@ void do_trap(struct cpu_user_regs *cpu_regs)
             break;
         }
     }
+
+    tp->guest_cpu_info = (struct cpu_info *)old_regs;
 
     if ( (cpu_regs->hstatus & HSTATUS_SPV) )
         leave_hypervisor_to_guest();

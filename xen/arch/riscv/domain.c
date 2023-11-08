@@ -83,6 +83,7 @@ void context_switch(struct vcpu *prev, struct vcpu *next)
 
     ctxt_switch_to(next); 
 
+    tp->hsp = (unsigned long)next->arch.cpu_info;
     tp->guest_cpu_info = next->arch.cpu_info;
 
     prev = __context_switch(prev, next);
@@ -293,6 +294,9 @@ void noreturn startup_cpu_idle_loop(void)
     struct vcpu *v = current;
 
     ASSERT(is_idle_vcpu(v));
+
+    tp->hsp = v->arch.saved_context.sp;
+    tp->guest_cpu_info = (struct cpu_info *)guest_regs(v);
 
     reset_stack_and_jump(idle_loop);
 
