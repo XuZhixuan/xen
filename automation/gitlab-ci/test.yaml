@@ -19,6 +19,11 @@
   - alpine-3.12-rootfs-export
   - kernel-6.1.19-export
 
+.riscv64-test-needs: &riscv64-test-needs
+  - qemu-system-riscv64-8.2.0-riscv64-export
+  - kernel-6.4-riscv64-export
+  - busybox-1.31.6-riscv64-rootfs-export
+
 .qemu-arm64:
   extends: .test-jobs-common
   variables:
@@ -444,3 +449,4 @@ qemu-smoke-riscv64-gcc:
     - ./automation/scripts/qemu-smoke-riscv64.sh 2>&1 | tee ${LOGFILE}
   needs:
     - archlinux-current-gcc-riscv64-debug
+    - *riscv64-test-needs
