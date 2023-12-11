@@ -484,6 +484,8 @@ alpine-3.12-gcc-debug-arm64-boot-cpupools:
       CONFIG_BOOT_TIME_CPUPOOLS=y
 
 # RISC-V 64 cross-build
+include: 'automation/gitlab-ci/riscv-fixed-randconfig.yaml'
+
 archlinux-current-gcc-riscv64:
   extends: .gcc-riscv64-cross-build
   variables:
@@ -504,8 +506,7 @@ archlinux-current-gcc-riscv64-randconfig:
     CONTAINER: archlinux:current-riscv64
     KBUILD_DEFCONFIG: tiny64_defconfig
     RANDCONFIG: y
-    EXTRA_FIXED_RANDCONFIG:
-      CONFIG_COVERAGE=n
+    EXTRA_FIXED_RANDCONFIG: !reference [.riscv-fixed-randconfig, variables, EXTRA_FIXED_RANDCONFIG]
 
 archlinux-current-gcc-riscv64-debug-randconfig:
   extends: .gcc-riscv64-cross-build-debug
@@ -513,8 +514,7 @@ archlinux-current-gcc-riscv64-debug-randconfig:
     CONTAINER: archlinux:current-riscv64
     KBUILD_DEFCONFIG: tiny64_defconfig
     RANDCONFIG: y
-    EXTRA_FIXED_RANDCONFIG:
-      CONFIG_COVERAGE=n
+    EXTRA_FIXED_RANDCONFIG: !reference [.riscv-fixed-randconfig, variables, EXTRA_FIXED_RANDCONFIG]
 
 # Yocto test jobs
 yocto-qemuarm64:

@@ -14,7 +14,8 @@ if [[ "${RANDCONFIG}" == "y" ]]; then
 
     # Append job-specific fixed configuration
     if [[ -n "${EXTRA_FIXED_RANDCONFIG}" ]]; then
-        echo "${EXTRA_FIXED_RANDCONFIG}" >> xen/tools/kconfig/allrandom.config
+        sed "s/ /\n/g" <<< "${EXTRA_FIXED_RANDCONFIG}" > xen/tools/kconfig/allrandom.config
+        # echo "${EXTRA_FIXED_RANDCONFIG}" >> xen/tools/kconfig/allrandom.config
     fi
 
     make -j$(nproc) -C xen KCONFIG_ALLCONFIG=tools/kconfig/allrandom.config randconfig
@@ -28,7 +29,8 @@ else
     echo "CONFIG_DEBUG=${debug}" >> xen/.config
 
     if [[ -n "${EXTRA_XEN_CONFIG}" ]]; then
-        echo "${EXTRA_XEN_CONFIG}" >> xen/.config
+        sed "s/ /\n/g" <<< "${EXTRA_XEN_CONFIG}" >> xen/.config
+        # echo "${EXTRA_XEN_CONFIG}" >> xen/.config
     fi
 
     make -j$(nproc) -C xen olddefconfig
