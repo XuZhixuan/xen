@@ -10,29 +10,7 @@ FW_PATH=binaries/opensbi-riscv64-generic-fw_dynamic.bin
 QEMU=./binaries/qemu-system-riscv64
 XEN=./binaries/xen
 
-CONFIG_FILE="dom0.conf"
-PLATFORM_NAME=dom0-qemu-virt
-PLATFORM_PCPU_NUM=1
-PLATFORM_RAM_SIZE=2g
-PLATFORM_XEN_BOOTARGS="com1=poll sched=null"
-DOM0_KERNEL_ADDR=0x808ef000
-DOM0_KERNEL_PATH=./binaries/Image.gz
-DOM0_RAMDISK_ADDR=0x90400000
-DOM0_RAMDISK_PATH=./binaries/initrd.img
-DOM0_BOOTARGS="rw root=/dev/ram console=hvc0 keep_bootcon bootmem_debug debug"
-
-echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
-PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
-PLATFORM_RAM_SIZE=\"${PLATFORM_RAM_SIZE}\"
-PLATFORM_XEN_BOOTARGS=\"${PLATFORM_XEN_BOOTARGS}\"
-PLATFORM_INTERRUPT_CONTROLLER=\"plic\"
-PLATFORM_DOM0LESS=false
-
-DOM0_KERNEL_ADDR=\"${DOM0_KERNEL_ADDR}\"
-DOM0_KERNEL_PATH=\"${DOM0_KERNEL_PATH}\"
-DOM0_RAMDISK_ADDR=\"${DOM0_RAMDISK_ADDR}\"
-DOM0_RAMDISK_PATH=\"${DOM0_RAMDISK_PATH}\"
-DOM0_BOOTARGS=\"${DOM0_BOOTARGS}\"" > "${CONFIG_FILE}"
+TEST_CASE=$1
 
 # Arrays to store parsed data
 declare -A PLATFORM_DATA
@@ -174,7 +152,7 @@ generate_base_dts() {
     local xen_boot_args=$(get_platform_val XEN_BOOTARGS)
 
     case $platform_name in
-        qemu-virt)
+        dom0less-qemu-virt)
             ${QEMU} -M virt -smp $platform_cpu_num -nographic \
                     -bios ${FW_PATH} \
                     -append "${xen_boot_args}" -kernel ${XEN} \
@@ -265,7 +243,7 @@ check_and_set_platform_data_default() {
 process_platform_data() {
     echo "Processing PLATFORM data:"
 
-    check_and_set_platform_data_default "NAME" "qemu-virt"
+    check_and_set_platform_data_default "NAME" "dom0less-qemu-virt"
     check_and_set_platform_data_default "RAM_SIZE" "4g"
     check_and_set_platform_data_default "CPU_NUM" "1"
     check_and_set_platform_data_default "XEN_BOOTARGS" ""
@@ -402,23 +380,129 @@ parse_config_file() {
     fi
 }
 
+case "${TEST_CASE}" in
+    "dom0-test" | "dom0-smp-test")
+        if [ "$TEST_CASE" = "dom0-smp-test" ]; then
+            PLATFORM_PCPU_NUM=4
+        elif [ "$TEST_CASE" = "dom0-test" ]; then
+            PLATFORM_PCPU_NUM=1
+        fi
+
+        CONFIG_FILE="dom0.conf"
+        PLATFORM_NAME=dom0-qemu-virt
+        PLATFORM_RAM_SIZE=2g
+        PLATFORM_XEN_BOOTARGS="com1=poll sched=null"
+        DOM0_KERNEL_ADDR=0x808ef000
+        DOM0_KERNEL_PATH=./binaries/Image.gz
+        DOM0_RAMDISK_ADDR=0x90400000
+        DOM0_RAMDISK_PATH=./binaries/initrd.img
+        DOM0_BOOTARGS="rw root=/dev/ram console=hvc0 keep_bootcon bootmem_debug debug"
+
+        echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
+        PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
+        PLATFORM_RAM_SIZE=\"${PLATFORM_RAM_SIZE}\"
+        PLATFORM_XEN_BOOTARGS=\"${PLATFORM_XEN_BOOTARGS}\"
+        PLATFORM_INTERRUPT_CONTROLLER=\"plic\"
+        PLATFORM_DOM0LESS=false
+
+        DOM0_KERNEL_ADDR=\"${DOM0_KERNEL_ADDR}\"
+        DOM0_KERNEL_PATH=\"${DOM0_KERNEL_PATH}\"
+        DOM0_RAMDISK_ADDR=\"${DOM0_RAMDISK_ADDR}\"
+        DOM0_RAMDISK_PATH=\"${DOM0_RAMDISK_PATH}\"
+        DOM0_BOOTARGS=\"${DOM0_BOOTARGS}\"" > "${CONFIG_FILE}"
+        ;;
+    "dom0less-4smp-1vcpu-test")
+        PLATFORM_PCPU_NUM=4
+
+        CONFIG_FILE="dom0less.conf"
+        PLATFORM_NAME=dom0less-qemu-virt
+        PLATFORM_RAM_SIZE=2g
+        DOMU1_KERNEL_ADDR=0x808ef000
+        DOMU1_KERNEL_PATH=./binaries/Image.gz
+        DOMU1_RAMDISK_ADDR=0x90400000
+        DOMU1_RAMDISK_PATH=./binaries/initrd.img
+        DOMU2_KERNEL_ADDR=0xa0000000
+        DOMU2_KERNEL_PATH=./binaries/Image.gz
+        DOMU2_RAMDISK_ADDR=0xb0000000
+        DOMU2_RAMDISK_PATH=./binaries/initrd.img
+
+        echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
+        PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
+        PLATFORM_RAM_SIZE=\"${PLATFORM_RAM_SIZE}\"
+        PLATFORM_XEN_BOOTARGS=com1=poll sched=null
+        PLATFORM_INTERRUPT_CONTROLLER=plic
+        PLATFORM_GUEST_DOM_NUM=2
+        PLATFORM_DOM0LESS=true
+
+        DOMU1_KERNEL_ADDR=\"${DOMU1_KERNEL_ADDR}\"
+        DOMU1_KERNEL_PATH=\"${DOMU1_KERNEL_PATH}\"
+        DOMU1_VSBI_UART=true
+        DOMU1_RAMDISK_ADDR=\"${DOMU1_RAMDISK_ADDR}\"
+        DOMU1_RAMDISK_PATH=\"${DOMU1_RAMDISK_PATH}\"
+        DOMU1_CPUS_NUM=1
+        DOMU1_BOOTARGS=\"console=hvc0\"
+
+        DOMU2_KERNEL_ADDR=\"${DOMU2_KERNEL_ADDR}\"
+        DOMU2_KERNEL_PATH=\"${DOMU2_KERNEL_PATH}\"
+        DOMU2_VSBI_UART=true
+        DOMU2_RAMDISK_ADDR=\"${DOMU2_RAMDISK_ADDR}\"
+        DOMU1_RAMDISK_PATH=\"${DOMU2_RAMDISK_PATH}\"
+        DOMU2_RAMDISK_PATH=./binaries/initrd.img
+        DOMU2_CPUS_NUM=1
+        DOMU2_BOOTARGS=\"console=hvc0\"" > "${CONFIG_FILE}"
+        ;;
+    *)
+        echo "Invalid option: $value"
+        # Handle invalid options
+        exit 1
+        ;;
+esac
+
+cat "${CONFIG_FILE}"
+
 parse_config_file
 generate_dtb
 
-timeout -k 1 40 \
-${QEMU} -M virt \
-        -bios ${FW_PATH} \
-        -smp ${PLATFORM_PCPU_NUM} \
-        -nographic \
-        -m ${PLATFORM_RAM_SIZE} \
-        -kernel ${XEN} \
-        -device "loader,file=${DOM0_KERNEL_PATH},addr=${DOM0_KERNEL_ADDR}" \
-        -device "loader,file=${DOM0_RAMDISK_PATH},addr=${DOM0_RAMDISK_ADDR}" \
-        -dtb ./binaries/${PLATFORM_NAME}.dtb \
-        |& tee smoke.serial
+case "${TEST_CASE}" in
+    "dom0-test" | "dom0-smp-test")
+        timeout -k 1 40 \
+        ${QEMU} -M virt \
+                -bios ${FW_PATH} \
+                -smp ${PLATFORM_PCPU_NUM} \
+                -nographic \
+                -m ${PLATFORM_RAM_SIZE} \
+                -kernel ${XEN} \
+                -device "loader,file=${DOM0_KERNEL_PATH},addr=${DOM0_KERNEL_ADDR}" \
+                -device "loader,file=${DOM0_RAMDISK_PATH},addr=${DOM0_RAMDISK_ADDR}" \
+                -dtb ./binaries/${PLATFORM_NAME}.dtb \
+                |& tee smoke.serial
+
+        set -e
+        (grep -q "Hello RISC-V World!" smoke.serial) || exit 1
+        ;;
+    "dom0less-4smp-1vcpu-test")
+        timeout -k 1 40 \
+        ${QEMU} -M virt \
+                -bios ${FW_PATH} \
+                -smp ${PLATFORM_PCPU_NUM} \
+                -nographic \
+                -m ${PLATFORM_RAM_SIZE} \
+                -kernel ${XEN} \
+                -device "loader,file=${DOMU1_KERNEL_PATH},addr=${DOMU1_KERNEL_ADDR}" \
+                -device "loader,file=${DOMU1_RAMDISK_PATH},addr=${DOMU1_RAMDISK_ADDR}" \
+                -device "loader,file=${DOMU2_KERNEL_PATH},addr=${DOMU2_KERNEL_ADDR}" \
+                -device "loader,file=${DOMU2_RAMDISK_PATH},addr=${DOMU2_RAMDISK_ADDR}" \
+                -dtb ./binaries/${PLATFORM_NAME}.dtb \
+                |& tee smoke.serial
+        set -e
+        [[ $(grep -c "Hello RISC-V World!" smoke.serial) -eq 2 ]] || exit 1
+        ;;
+    *)
+        echo "Invalid option: ${TEST_CASE}"
+        exit 1
+        ;;
+esac
 
 rm ${CONFIG_FILE}
 
-set -e
-(grep -q "Hello RISC-V World!" smoke.serial) || exit 1
 exit 0
