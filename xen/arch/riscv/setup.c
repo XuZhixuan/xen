@@ -253,7 +253,10 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     system_state = SYS_STATE_active;
 
     for_each_domain( d )
+    {
+        gic_iomem_deny_access(d);
         domain_unpause_by_systemcontroller(d);
+    }
 
     /* Switch on to the dynamically allocated stack for the idle vcpu
      * since the static one we're running on is about to be freed. */

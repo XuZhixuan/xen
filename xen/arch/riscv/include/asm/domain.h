@@ -61,6 +61,10 @@ struct arch_domain
     /* GIC phandle */
     uint32_t phandle_gic;
 
+    /* TODO: should it be here??? */
+    /* passhtrough device irq cell size*/
+    uint32_t irq_cell_size;
+
     /* TODO: looks like it is AIA specific field so should it be here or in this way? */
     /* irq enabled for this domain */
     uint32_t auth_irq_bmp[32];
