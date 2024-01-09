@@ -24,6 +24,7 @@
 #include <public/version.h>
 
 #include <asm/current.h>
+#include <asm/cpufeature.h>
 #include <asm/early_printk.h>
 #include <asm/processor.h>
 #include <asm/plic.h>
@@ -167,6 +168,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     vm_init();
 
     dt_unflatten_host_device_tree();
+
+    riscv_fill_hwcap();
 
     tasklet_subsys_init();
 

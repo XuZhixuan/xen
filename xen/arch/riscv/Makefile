@@ -1,3 +1,4 @@
+obj-y += cpufeature.o
 obj-y += delay.o
 obj-y += device.o
 obj-y += domain.o
