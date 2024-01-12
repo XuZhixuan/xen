@@ -14,6 +14,7 @@
 #include <xen/types.h>
 
 #include <asm/gic.h>
+#include <asm/vplic.h>
 
 static const struct gic_hw_operations *gic_ops = NULL;
 
@@ -128,6 +129,9 @@ struct vgic* gic_alloc_vgic(struct vcpu *vcpu)
 
     switch ( gic_ops->info->hw_version )
     {
+    case GIC_PLIC:
+        v = &vplic_alloc(vcpu)->vgic;
+        break;
     default:
         printk(XENLOG_WARNING "need to add allocation vgic?\n");
         return NULL;
@@ -144,6 +148,9 @@ void gic_free_vgic(struct vgic *v)
 {
     switch ( gic_ops->info->hw_version )
     {
+    case GIC_PLIC:
+        if ( v ) to_vaplic(v);
+        break;
     default:
         panic("Unsupported free of gic\n"); 
     }

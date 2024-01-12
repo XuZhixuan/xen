@@ -6,11 +6,9 @@
 #ifndef __ASM_RISCV_PLIC_H__
 #define __ASM_RISCV_PLIC_H__
 
-/* Find the interrupt controller and set up the callback to translate
- * device tree IRQ.
- */
-extern void plic_preinit(void);
-
-void plic_init_secondary_cpu(void);
+/* TODO: should be got from DTS */
+#define PLIC_BASE  0xc000000
+#define PLIC_SIZE  0x0210000
+#define PLIC_END (PLIC_BASE + PLIC_SIZE)
 
 #endif

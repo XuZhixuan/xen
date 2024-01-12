@@ -3,8 +3,9 @@
 #include <xen/setup.h>
 #include <xen/sched.h>
 #include <xen/xmalloc.h>
-#include <asm/vplic.h>
 
+#include <asm/plic.h>
+#include <asm/vplic.h>
 
 #define PLIC_ENABLE_BASE 0x002000
 #define PLIC_ENABLE_END  0x1FFFFC
@@ -16,40 +17,26 @@
  */
 #define PLIC_ENABLE_BITS_PER_CONTEXT 0x80
 
-struct vplic *vplic_alloc(void)
+static inline int is_plic_access(struct vcpu *vcpu, unsigned long addr)
 {
-    struct vplic *p;
-    
-    p = xzalloc(struct vplic);
-
-    if ( !p )
-        return NULL;
-
-    p->base = PLIC_BASE;
-    p->num_contexts = NR_VCPUS * 2;
-
-    if ( p->num_contexts > MAX_CONTEXTS )
-        goto err;
-
-    p->contexts = xzalloc_array(struct context, p->num_contexts);
-
-    if ( !p->contexts )
-        goto err;
-
-    return p;
-
-err:
-    xfree(p);
-    return NULL;
+    return PLIC_BASE < addr && addr < PLIC_END;
 }
 
-int vplic_emulate_load(struct vcpu *vcpu, unsigned long addr, void *out, int out_len)
+static int vplic_emulate_store(struct vcpu *vcpu, unsigned long addr, uint32_t in)
 {
-    struct vplic *vplic = vcpu->arch.vplic;
+    printk("%s: TODO: emulate_store()\n", __func__);
+
+    return 0;
+}
+
+static int vplic_emulate_load(struct vcpu *vcpu, unsigned long addr, uint32_t *out)
+{
+    struct vplic *vplic = to_vplic(vcpu->arch.vgic);
     struct context *ctx;
     unsigned context_num;
     unsigned long offset;
     void *p;
+    unsigned int out_len = 4;
 
     BUG_ON( !out );
 
@@ -81,4 +68,35 @@ int vplic_emulate_load(struct vcpu *vcpu, unsigned long addr, void *out, int out
     }
 
     return 0;
+}
+
+struct vplic *vplic_alloc(struct vcpu *vcpu)
+{
+    struct vplic *p;
+
+    p = xzalloc(struct vplic);
+
+    if ( !p )
+        return NULL;
+
+    p->vgic.emulate_load = vplic_emulate_load;
+    p->vgic.emulate_store = vplic_emulate_store;
+    p->vgic.is_access = is_plic_access;
+
+    p->base = PLIC_BASE;
+    p->num_contexts = NR_VCPUS * 2;
+
+    if ( p->num_contexts > MAX_CONTEXTS )
+        goto err;
+
+    p->contexts = xzalloc_array(struct context, p->num_contexts);
+
+    if ( !p->contexts )
+        goto err;
+
+    return p;
+
+err:
+    xfree(p);
+    return NULL;
 }

@@ -14,6 +14,7 @@
 #include <asm/csr.h>
 #include <asm/early_printk.h>
 #include <asm/guest_access.h>
+#include <asm/plic.h>
 #include <asm/processor.h>
 #include <asm/sbi.h>
 #include <asm/setup.h>
@@ -545,11 +546,6 @@ static void handle_guest_sbi(struct cpu_user_regs *regs)
 static inline unsigned long get_faulting_gpa(void)
 {
     return (csr_read(CSR_HTVAL) << 2) | (csr_read(CSR_STVAL) & 0x3);
-}
-
-static bool is_plic_access(unsigned long addr)
-{
-    return PLIC_BASE < addr && addr < PLIC_END;
 }
 
 static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,

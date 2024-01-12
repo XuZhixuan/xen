@@ -4,44 +4,38 @@
 #include <xen/device_tree.h>
 #include <xen/init.h>
 #include <xen/lib.h>
+
 #include <asm/device.h>
+#include <asm/gic.h>
 #include <asm/plic.h>
 #include <asm/vplic.h>
 
-void __init plic_init_secondary_cpu(void)
+struct plic_priv {
+    /* base physical address and size */
+    paddr_t    paddr_start;
+    paddr_t    paddr_end;
+    uint64_t   size;
+};
+
+static struct plic_priv plic;
+
+static struct gic_info plic_info = {
+    .hw_version = GIC_PLIC,
+    .node = NULL,
+    .private = &plic
+};
+
+int __init plic_init_secondary_cpu(void)
 {
-    printk("need to be implemented\n");
+    printk(XENLOG_WARNING "%s: need to be implemented\n", __func__);
+
+    return -EOPNOTSUPP;
 }
 
-static void __init plic_dt_preinit(void)
-{
-    int rc = -ENODEV;
-    struct dt_device_node *node;
-
-    dt_for_each_device_node( dt_host, node )
-    {
-        if ( !dt_get_property(node, "interrupt-controller", NULL) )
-            continue;
-
-        if ( !dt_get_parent(node) )
-            continue;
-
-        rc = device_init(node, DEVICE_GIC, NULL);
-        if ( !rc )
-            break;
-    }
-
-    if ( rc )
-        panic("Unable to find PLIC node in the device tree\n");
-
-    dt_interrupt_controller = node;
-    dt_device_set_used_by(node, DOMID_XEN);
-}
-
-void __init plic_preinit(void)
-{
-    plic_dt_preinit();
-}
+const static struct gic_hw_operations plic_ops = {
+    .info               = &plic_info,
+    .secondary_init     = plic_init_secondary_cpu,
+};
 
 int plic_irq_xlate(const u32 *intspec, unsigned int intsize,
                    unsigned int *out_hwirq,
@@ -69,6 +63,10 @@ static int __init plic_dev_dt_preinit(struct dt_device_node *node,
                                       const void *data)
 {
     dt_irq_xlate = plic_irq_xlate;
+
+    plic_info.node = node;
+
+    gic_ops_register(&plic_ops);
 
     return 0;
 }
