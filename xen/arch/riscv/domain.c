@@ -5,6 +5,7 @@
 #include <xen/domain.h>
 #include <xen/softirq.h>
 #include <asm/current.h>
+#include <asm/gic.h>
 #include <asm/p2m.h>
 #include <asm/riscv_encoding.h>
 #include <asm/traps.h>
@@ -373,15 +374,19 @@ int arch_vcpu_create(struct vcpu *v)
     printk(XENLOG_INFO "Create vCPU with sp=0x%02lx, pc=0x%02lx\n",
             v->arch.saved_context.sp, v->arch.saved_context.ra);
 
-    v->arch.vplic = vplic_alloc();
-
-    if ( !v->arch.vplic )
-    {
-        free_xenheap_pages(v->arch.stack, 3);
-        return -ENOMEM;
-    }
-
     vcpu_csr_init(v);
+
+    /* no interruption controler for reserved domain */
+    if ( v->domain->domain_id < DOMID_FIRST_RESERVED )
+    {
+        v->arch.vgic = gic_alloc_vgic(v);
+
+        if ( !v->arch.vgic )
+        {
+            free_xenheap_pages(v->arch.stack, 3);
+            return -ENOMEM;
+        }
+    }
 
     if ( (rc = vcpu_vtimer_init(v)) != 0 )
         goto fail;
@@ -395,6 +400,8 @@ int arch_vcpu_create(struct vcpu *v)
 
 void arch_vcpu_destroy(struct vcpu *v)
 {
+    gic_free_vgic(v->arch.vgic);
+
     /* TODO */
 }
 

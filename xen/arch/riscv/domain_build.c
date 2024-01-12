@@ -12,6 +12,7 @@
 #include <xen/warning.h>
 #include <xen/libfdt/libfdt.h>
 
+#include <asm/gic.h>
 #include <asm/kernel.h>
 #include <asm/vsbi_uart.h>
 
@@ -620,11 +621,20 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
     return 0;
 }
 
-static int __init make_plic_node(const struct kernel_info *kinfo)
+static int __init make_gic_node(struct domain *d, void *fdt,
+                                const struct dt_device_node *node)
 {
-    printk("%s: need to be implemented\n", __func__);
+    /*
+     * Xen currently supports only a single GIC. Discard any secondary
+     * GIC entries.
+     */
+    if ( node != dt_interrupt_controller )
+    {
+        dt_dprintk("Skipping (secondary GIC)\n");
+        return 0;
+    }
 
-    return 0;
+    return  gic_make_hwdom_dt_node(d, node, fdt);
 }
 
 static int __init make_timer_node(const struct kernel_info *kinfo)
@@ -916,7 +926,7 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
      * used_by DOMID_XEN so this check comes first.
      */
     if ( device_get_class(node) == DEVICE_GIC )
-        return make_plic_node(kinfo);
+        return make_gic_node(d, kinfo->fdt, node);
 
     if ( dt_match_node(timer_matches, node) )
         return make_timer_node(kinfo);
@@ -1365,9 +1375,8 @@ static int __init domain_handle_dtb_bootmodule(struct domain *d,
 
 static int __init make_gic_domU_node(struct kernel_info *kinfo)
 {
-    printk("%s isn't supported\n", __func__);
+    gic_make_domu_dt_node(kinfo->d, kinfo->fdt);
 
-    /* TODO: need rework... */
     return 0;
 }
 
@@ -1537,6 +1546,10 @@ static int __init construct_domU(struct domain *d,
     else if ( rc == 0 && !strcmp(dom0less_enhanced, "no-xenstore") )
         kinfo.dom0less_feature = DOM0LESS_ENHANCED_NO_XS;
 
+    rc = gic_register_domain(d);
+    if ( rc )
+        return rc;
+
     if ( vcpu_create(d, 0) == NULL )
         return -ENOMEM;
 
@@ -1574,12 +1587,15 @@ static int __init construct_domU(struct domain *d,
 
     rc = prepare_dtb_domU(d, &kinfo);
     if ( rc < 0 )
-        return rc;
+        goto construct_domU_err;
 
     rc = construct_domain(d, &kinfo);
-    if ( rc < 0 )
-        return rc;
+    if ( rc )
+        goto construct_domU_err;
+    return 0;
 
+construct_domU_err:
+    gic_unregister_domain(d);
     return rc;
 }
 

@@ -149,7 +149,7 @@ void gic_free_vgic(struct vgic *v)
     switch ( gic_ops->info->hw_version )
     {
     case GIC_PLIC:
-        if ( v ) to_vaplic(v);
+        if ( v ) to_vplic(v);
         break;
     default:
         panic("Unsupported free of gic\n"); 

@@ -477,9 +477,9 @@ static void guest_sbi_rfence(struct cpu_user_regs *regs)
     }
 }
 
-static inline void advance_pc(struct cpu_user_regs *regs)
+static inline void advance_pc(struct cpu_user_regs *regs, int step)
 {
-    regs->sepc += 4;
+    regs->sepc += step;
 }
 
 static void handle_guest_sbi(struct cpu_user_regs *regs)
@@ -540,7 +540,7 @@ static void handle_guest_sbi(struct cpu_user_regs *regs)
         break;
     };
 
-    advance_pc(regs);
+    advance_pc(regs, 4);
 }
 
 static inline unsigned long get_faulting_gpa(void)
@@ -551,14 +551,12 @@ static inline unsigned long get_faulting_gpa(void)
 static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
                         unsigned long htinst)
 {
-    uint8_t data8;
-    uint16_t data16;
     uint32_t data32;
-    uint64_t data64;
     int rc;
 	unsigned long insn;
 	int shift = 0, len = 0, insn_len = 0;
 	struct riscv_trap utrap = { 0 };
+    struct vgic *vgic = vcpu->arch.vgic;
 
 	/* Determine trapped instruction */
 	if (htinst & 0x1) {
@@ -636,40 +634,21 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
     printk("emulating load: pc=0x%02lx, addr=0x%02lx, len=%d, shift=%d\n",
             guest_regs(vcpu)->sepc, fault_addr, len, shift);
 
-    if ( is_plic_access(fault_addr) )
+    if ( vgic->is_access(vcpu, fault_addr) )
     {
-        switch ( len )
-        {
-        case 1:
-            rc = vplic_emulate_load(current, fault_addr, &data8, len);
-            if ( rc < 0 )
-                return rc;
-            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data8 << shift) >> shift);
-            break;
-        case 2:
-            rc = vplic_emulate_load(current, fault_addr, &data16, len);
-            if ( rc < 0 )
-                return rc;
-            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data16 << shift) >> shift);
-            break;
-        case 4:
-            rc = vplic_emulate_load(current, fault_addr, &data32, len);
-            if ( rc < 0 )
-                return rc;
-            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data32 << shift) >> shift);
-            break;
-        case 8:
-            rc = vplic_emulate_load(current, fault_addr, &data64, len);
-            if ( rc < 0 )
-                return rc;
-            SET_RD(insn, guest_regs(vcpu), ((unsigned long)data64 << shift) >> shift);
-            break;
-        default:
-            BUG();
-        }
-    }
+        /* PLIC/APLIC access are always on 32bit */
+        ASSERT( len == 4 );
 
-    advance_pc(guest_regs(vcpu));
+        rc = vgic->emulate_load(vcpu, fault_addr, &data32);
+        if ( rc < 0 )
+            return rc;
+
+        SET_RD(insn, guest_regs(vcpu), ((unsigned long)data32 << shift) >> shift);
+    }
+    else
+        panic("unable to handle guest load instruction %lx at %lx\n", insn, fault_addr);
+
+    advance_pc(guest_regs(vcpu), insn_len);
 
     return 0;
 }
@@ -689,12 +668,14 @@ static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *r
 
     if ( cause == CAUSE_LOAD_GUEST_PAGE_FAULT )
     {
-        emulate_load(current, get_faulting_gpa(), csr_read(CSR_HTINST));
+        if ( emulate_load(current, addr, csr_read(CSR_HTINST)) )
+        {
+            panic("%s: unable to handle faulted guest load @ addr 0x%02lx\n", __func__, addr);
+        }
     }
     else if ( cause == CAUSE_STORE_GUEST_PAGE_FAULT )
     {
-        printk("TODO: emulate_store()\n");
-        advance_pc(regs);
+        panic("TODO: emulate_store()\n");
     }
 }
 

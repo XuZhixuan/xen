@@ -86,7 +86,7 @@ struct arch_vcpu
 
     struct cpu_info *cpu_info;
     void *stack;
-    struct vplic *vplic;
+    struct vgic *vgic;
     struct vtimer vtimer;
     bool vtimer_initialized;
 

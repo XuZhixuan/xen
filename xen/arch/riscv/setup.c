@@ -26,6 +26,7 @@
 #include <asm/current.h>
 #include <asm/cpufeature.h>
 #include <asm/early_printk.h>
+#include <asm/gic.h>
 #include <asm/processor.h>
 #include <asm/plic.h>
 #include <asm/sbi.h>
@@ -184,7 +185,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     preinit_xen_time();
 
-    plic_preinit();
+    gic_preinit();
 
     uart_init();
     console_init_preirq();
@@ -197,6 +198,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     timer_init();
 
     rcu_init();
+
+    gic_init();
 
     setup_system_domains();
 
