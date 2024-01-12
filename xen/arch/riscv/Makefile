@@ -7,6 +7,7 @@ obj-y += domctl.o
 obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
 obj-y += efi/
 obj-y += entry.o
+obj-y += gic.o
 obj-y += guestcopy.o
 obj-y += irq.o
 obj-y += kernel.o
