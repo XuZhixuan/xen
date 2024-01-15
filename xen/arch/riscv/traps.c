@@ -653,6 +653,95 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
     return 0;
 }
 
+static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
+                         unsigned long htinst)
+{
+    uint32_t data32;
+    int rc;
+    unsigned long insn;
+    int len = 0, insn_len = 0;
+    struct riscv_trap utrap = { 0 };
+    struct vgic *vgic = vcpu->arch.vgic;
+
+    if ( htinst & 0x1 )
+    {
+        /*
+         * Bit[0] == 1 implies trapped instruction value is
+         * transformed instruction or custom instruction.
+         */
+        insn = htinst | INSN_16BIT_MASK;
+        insn_len = ( htinst & 0x2 ) ? INSN_LEN(insn) : 2;
+    }
+    else
+    {
+        /*
+        * Bit[0] == 0 implies trapped instruction value is
+        * zero or special value.
+        */
+        insn = riscv_vcpu_unpriv_read(vcpu, true, guest_regs(vcpu)->sepc,
+                                      &utrap);
+        if ( utrap.scause )
+        {
+            /* Redirect trap if we failed to read instruction */
+            utrap.sepc = guest_regs(vcpu)->sepc;
+            printk("TODO: we failed to read the trapped insns, "
+                    "so redirect trap to guest\n");
+            return 1;
+        }
+        insn_len = INSN_LEN(insn);
+    }
+
+    data32 = GET_RS2(insn, guest_regs(vcpu));
+
+    if ( (insn & INSN_MASK_SW) == INSN_MATCH_SW )
+        len = 4;
+    else if ( (insn & INSN_MASK_SB) == INSN_MATCH_SB )
+        len = 1;
+    #if defined(CONFIG_64BIT)
+    else if ( (insn & INSN_MASK_SD) == INSN_MATCH_SD )
+        len = 8;
+    #endif
+    else if ( (insn & INSN_MASK_SH) == INSN_MATCH_SH )
+        len = 2;
+    # if defined(CONFIG_64BIT)
+    else if ( (insn & INSN_MASK_C_SD) == INSN_MATCH_C_SD )
+        len = 8;
+    else if ( (insn & INSN_MASK_C_SDSP) == INSN_MATCH_C_SDSP &&
+            ((insn >> SH_RD) & 0x1f) )
+        len = 8;
+    # endif
+    else if ( (insn & INSN_MASK_C_SW) == INSN_MATCH_C_SW )
+    {
+        len = 4;
+        data32 = GET_RS2S(insn, guest_regs(vcpu));
+    } else if ( (insn & INSN_MASK_C_SWSP) == INSN_MATCH_C_SWSP &&
+            ((insn >> SH_RD) & 0x1f) )
+    {
+        len = 4;
+        data32 = GET_RS2C(insn, guest_regs(vcpu));
+    }
+    else
+        return -EOPNOTSUPP;
+
+    /* Fault address should be aligned to length of MMIO */
+    if ( fault_addr & (len - 1) )
+        return -EIO;
+
+    if ( vgic->is_access(vcpu, fault_addr) )
+    {
+        /* PLIC/APLIC access are always on 32bit */
+        ASSERT(len == 4);
+        rc = vgic->emulate_store(vcpu, fault_addr, data32);
+        if ( rc < 0 )
+            return rc;
+    }
+    else
+        panic("unable to handle guest store instruction %lx at %lx\n", insn, fault_addr);
+
+    advance_pc(guest_regs(vcpu), insn_len);
+    return 0;
+}
+
 static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *regs)
 {
     unsigned long addr;
@@ -675,7 +764,8 @@ static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *r
     }
     else if ( cause == CAUSE_STORE_GUEST_PAGE_FAULT )
     {
-        panic("TODO: emulate_store()\n");
+        if ( emulate_store(current, addr, csr_read(CSR_HTINST)) )
+            panic("%s: unable to handle faulted guest store @ addr 0x%02lx\n", __func__, addr);
     }
 }
 
