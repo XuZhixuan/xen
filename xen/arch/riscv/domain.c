@@ -4,6 +4,7 @@
 #include <xen/sched.h>
 #include <xen/domain.h>
 #include <xen/softirq.h>
+#include <asm/cpufeature.h>
 #include <asm/current.h>
 #include <asm/gic.h>
 #include <asm/p2m.h>
@@ -147,6 +148,8 @@ int arch_domain_create(struct domain *d,
                        unsigned int flags)
 {
     int rc = 0;
+
+    d->arch.phandle_gic = 0;
 
     if ( is_idle_domain(d) )
         return 0;
@@ -337,13 +340,32 @@ static void vcpu_csr_init(struct vcpu *v)
     hstatus = HSTATUS_SPV | HSTATUS_SPVP;
     v->arch.hstatus = hstatus;
 
-    hideleg = MIP_VSTIP;
+    hideleg = MIP_VSTIP |  MIP_VSEIP | MIP_VSSIP;
     v->arch.hideleg = hideleg;
+
+    v->arch.hie = hideleg;
 
     /* Enable all timers for guest */
     v->arch.hcounteren = -1UL;
 
     v->arch.henvcfg |= ENVCFG_STCE;
+
+    if ( riscv_isa_extension_available(NULL, SMSTATEEN) )
+        /*
+         * If the hypervisor extension is implemented, the same three bitsare
+         * defined also in hypervisor CSR hstateen0 but concern only the state
+         * potentially accessible to a virtual machine executing in privilege
+         * modes VS and VU:
+         *      bit 60 CSRs siselect and sireg (really vsiselect and vsireg)
+         *      bit 59 CSRs siph and sieh (RV32 only) and stopi (really vsiph,
+         *             vsieh, and vstopi)
+         *      bit 58 all state of IMSIC guest interrupt files, including CSR
+         *             stopei (really vstopei)
+         * If one of these bits is zero in hstateen0, and the same bit is one
+         * in mstateen0, then an attempt to access the corresponding state from
+         * VS or VU-mode raises a virtual instruction exception.
+        */
+        v->arch.hstateen0 = SMSTATEEN0_AIA | SMSTATEEN0_IMSIC | SMSTATEEN0_SVSLCT;
 
     /* Enable floating point and other extensions for guest. */
     /* TODO Disable them in Xen. */

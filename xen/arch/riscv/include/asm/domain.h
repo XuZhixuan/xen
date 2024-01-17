@@ -57,6 +57,14 @@ struct arch_domain
 
     struct vsbi_uart vsbi_uart;
 
+    /* TODO: should it be here??? */
+    /* GIC phandle */
+    uint32_t phandle_gic;
+
+    /* TODO: looks like it is AIA specific field so should it be here or in this way? */
+    /* irq enabled for this domain */
+    uint32_t auth_irq_bmp[32];
+
 }  __cacheline_aligned;
 
 struct arch_vcpu
@@ -104,6 +112,7 @@ struct arch_vcpu
     register_t htval;
     register_t htinst;
     register_t hgatp;
+    register_t hstateen0;
 #ifdef CONFIG_32BIT
     register_t henvcfgh;
     register_t htimedeltah;

@@ -11,6 +11,7 @@
 #include <xen/sched.h>
 #include <xen/softirq.h>
 
+#include <asm/cpufeature.h>
 #include <asm/csr.h>
 #include <asm/early_printk.h>
 #include <asm/guest_access.h>
@@ -260,6 +261,8 @@ void context_save_csrs(struct vcpu *vcpu)
     vcpu->arch.htval = csr_read(CSR_HTVAL);
     vcpu->arch.htinst = csr_read(CSR_HTINST);
     vcpu->arch.hgatp = csr_read(CSR_HGATP);
+    if ( riscv_isa_extension_available(NULL, SMSTATEEN) )
+        vcpu->arch.hstateen0 = csr_read(CSR_HSTATEEN0);
 #ifdef CONFIG_32BIT
     vcpu->arch.henvcfgh = csr_read(CSR_HENVCFGH);
     vcpu->arch.htimedeltah = csr_read(CSR_HTIMEDELTAH);
@@ -339,6 +342,7 @@ static void dump_csrs(unsigned long cause)
     print_csr(CSR_HTINST);
     print_csr(CSR_HEDELEG);
     print_csr(CSR_HIDELEG);
+    print_csr(CSR_HSTATEEN0);
 
     panic(__func__);
 }
@@ -358,6 +362,8 @@ void context_restore_csrs(struct vcpu *vcpu)
     csr_write(CSR_HTVAL, vcpu->arch.htval);
     csr_write(CSR_HTINST, vcpu->arch.htinst);
     csr_write(CSR_HGATP, vcpu->arch.hgatp);
+    if ( riscv_isa_extension_available(NULL, SMSTATEEN) )
+        csr_write(CSR_HSTATEEN0, vcpu->arch.hstateen0);
 #ifdef CONFIG_32BIT
     csr_write(CSR_HENVCFGH, vcpu->arch.henvcfgh);
     csr_write(CSR_HTIMEDELTAH, vcpu->arch.htimedeltah);

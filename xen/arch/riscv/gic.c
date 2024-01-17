@@ -14,6 +14,7 @@
 #include <xen/types.h>
 
 #include <asm/gic.h>
+#include <asm/vaplic.h>
 #include <asm/vplic.h>
 
 static const struct gic_hw_operations *gic_ops = NULL;
@@ -129,6 +130,9 @@ struct vgic* gic_alloc_vgic(struct vcpu *vcpu)
 
     switch ( gic_ops->info->hw_version )
     {
+    case GIC_APLIC:
+        v = &vaplic_alloc(vcpu)->base;
+        break;
     case GIC_PLIC:
         v = &vplic_alloc(vcpu)->vgic;
         break;
@@ -148,6 +152,9 @@ void gic_free_vgic(struct vgic *v)
 {
     switch ( gic_ops->info->hw_version )
     {
+    case GIC_APLIC:
+        vaplic_free(to_vaplic(v));
+        break;
     case GIC_PLIC:
         if ( v ) to_vplic(v);
         break;

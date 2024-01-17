@@ -724,15 +724,16 @@ static int __init make_cpus_node(const struct domain *d, void *fdt)
 
     for ( cpu = 0; cpu < d->max_vcpus; cpu++ )
     {
-        char buf[13];
-        u32 reg = cpu_to_fdt32(cpu);
+        char buf[64];
+        uint32_t reg = cpu_to_fdt32(cpu);
+        uint32_t phandle = 0;
 
         snprintf(buf, sizeof(buf), "cpu@%u", cpu);
         res = fdt_begin_node(fdt, buf);
         if ( res )
             return res;
         
-        res = fdt_property(fdt, "reg", &reg, sizeof(u32));
+        res = fdt_property(fdt, "reg", &reg, sizeof(uint32_t));
         if ( res )
             return res;
 
@@ -769,6 +770,14 @@ static int __init make_cpus_node(const struct domain *d, void *fdt)
             return res;
 
         res = fdt_property(fdt, "interrupt-controller", NULL, 0);
+        if ( res )
+            return res;
+
+        res = fdt_generate_phandle(fdt, &phandle);
+        if ( res )
+            return res;
+
+        res = fdt_property_u32(fdt, "phandle", phandle);
         if ( res )
             return res;
 
@@ -891,6 +900,7 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         DT_MATCH_COMPATIBLE("multiboot,module"),
         DT_MATCH_COMPATIBLE("syscon-poweroff"),
         DT_MATCH_COMPATIBLE("syscon-reboot"),
+        DT_MATCH_COMPATIBLE("riscv,imsics"),
         DT_MATCH_PATH("/cpus"),
         DT_MATCH_TYPE("memory"),
         { /* sentinel */ },
