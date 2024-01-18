@@ -12,6 +12,7 @@
 #include <xen/warning.h>
 #include <xen/libfdt/libfdt.h>
 
+#include <asm/fdtdump.h>
 #include <asm/gic.h>
 #include <asm/kernel.h>
 #include <asm/vsbi_uart.h>
@@ -1063,6 +1064,10 @@ static int __init prepare_dtb_hwdom(struct domain *d, struct kernel_info *kinfo)
     if ( ret < 0 )
         goto err;
 
+#ifdef CONFIG_DEBUG_FDT
+    fdt_dump(kinfo->fdt);
+#endif
+
     return 0;
 
   err:
@@ -1474,6 +1479,10 @@ static int __init prepare_dtb_domU(struct domain *d, struct kernel_info *kinfo)
     ret = fdt_finish(kinfo->fdt);
     if ( ret < 0 )
         goto err;
+
+#ifdef CONFIG_DEBUG_FDT
+    fdt_dump(kinfo->fdt);
+#endif
 
     return 0;
 

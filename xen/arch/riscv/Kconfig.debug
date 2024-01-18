@@ -3,3 +3,9 @@ config EARLY_PRINTK
     default DEBUG
     help
       Enables early printk debug messages
+
+config DEBUG_FDT
+		bool "Debug flattened device tree"
+		default DEBUG
+		help
+		  Dump the device tree created for domains.
