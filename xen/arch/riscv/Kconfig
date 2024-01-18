@@ -21,6 +21,13 @@ menu "Architecture Features"
 
 source "arch/Kconfig"
 
+config GEILEN
+	int "maximum guest external interrupt number"
+	range 0 63
+	default "7"
+	help
+	  Controls the build-time number of guest interrupt number.
+
 endmenu
 
 menu "ISA Selection"
