@@ -571,11 +571,11 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
 		 * Bit[0] == 0 implies trapped instruction value is
 		 * zero or special value.
 		 */
-		insn = riscv_vcpu_unpriv_read(vcpu, true, guest_regs(vcpu)->sepc,
+		insn = riscv_vcpu_unpriv_read(vcpu, true, guest_cpu_user_regs()->sepc,
                                       &utrap);
 		if (utrap.scause) {
 			/* Redirect trap if we failed to read instruction */
-			utrap.sepc = guest_regs(vcpu)->sepc;
+			utrap.sepc = guest_cpu_user_regs()->sepc;
             printk("TODO: we failed to read the trapped insns, "
                    "so redirect trap to guest\n");
 			return 1;
@@ -632,7 +632,7 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
 		return -EIO;
 
     printk("emulating load: pc=0x%02lx, addr=0x%02lx, len=%d, shift=%d\n",
-            guest_regs(vcpu)->sepc, fault_addr, len, shift);
+            guest_cpu_user_regs()->sepc, fault_addr, len, shift);
 
     if ( vgic->is_access(vcpu, fault_addr) )
     {
@@ -643,12 +643,12 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
         if ( rc < 0 )
             return rc;
 
-        SET_RD(insn, guest_regs(vcpu), ((unsigned long)data32 << shift) >> shift);
+        SET_RD(insn, guest_cpu_user_regs(), ((unsigned long)data32 << shift) >> shift);
     }
     else
         panic("unable to handle guest load instruction %lx at %lx\n", insn, fault_addr);
 
-    advance_pc(guest_regs(vcpu), insn_len);
+    advance_pc(guest_cpu_user_regs(), insn_len);
 
     return 0;
 }
@@ -678,12 +678,12 @@ static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
         * Bit[0] == 0 implies trapped instruction value is
         * zero or special value.
         */
-        insn = riscv_vcpu_unpriv_read(vcpu, true, guest_regs(vcpu)->sepc,
+        insn = riscv_vcpu_unpriv_read(vcpu, true, guest_cpu_user_regs()->sepc,
                                       &utrap);
         if ( utrap.scause )
         {
             /* Redirect trap if we failed to read instruction */
-            utrap.sepc = guest_regs(vcpu)->sepc;
+            utrap.sepc = guest_cpu_user_regs()->sepc;
             printk("TODO: we failed to read the trapped insns, "
                     "so redirect trap to guest\n");
             return 1;
@@ -691,7 +691,7 @@ static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
         insn_len = INSN_LEN(insn);
     }
 
-    data32 = GET_RS2(insn, guest_regs(vcpu));
+    data32 = GET_RS2(insn, guest_cpu_user_regs());
 
     if ( (insn & INSN_MASK_SW) == INSN_MATCH_SW )
         len = 4;
@@ -713,12 +713,12 @@ static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
     else if ( (insn & INSN_MASK_C_SW) == INSN_MATCH_C_SW )
     {
         len = 4;
-        data32 = GET_RS2S(insn, guest_regs(vcpu));
+        data32 = GET_RS2S(insn, guest_cpu_user_regs());
     } else if ( (insn & INSN_MASK_C_SWSP) == INSN_MATCH_C_SWSP &&
             ((insn >> SH_RD) & 0x1f) )
     {
         len = 4;
-        data32 = GET_RS2C(insn, guest_regs(vcpu));
+        data32 = GET_RS2C(insn, guest_cpu_user_regs());
     }
     else
         return -EOPNOTSUPP;
@@ -738,7 +738,7 @@ static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
     else
         panic("unable to handle guest store instruction %lx at %lx\n", insn, fault_addr);
 
-    advance_pc(guest_regs(vcpu), insn_len);
+    advance_pc(guest_cpu_user_regs(), insn_len);
     return 0;
 }
 
@@ -749,11 +749,6 @@ static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *r
     BUG_ON(cause != CAUSE_LOAD_GUEST_PAGE_FAULT && cause != CAUSE_STORE_GUEST_PAGE_FAULT);
 
     addr = get_faulting_gpa();
-
-    printk("%s: TODO: handle faulted guest IO %s @ addr 0x%02lx\n",
-            __func__,
-            (cause == CAUSE_LOAD_GUEST_PAGE_FAULT) ? "load" : "store",
-            addr);
 
     if ( cause == CAUSE_LOAD_GUEST_PAGE_FAULT )
     {
