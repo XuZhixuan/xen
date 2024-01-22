@@ -23,6 +23,8 @@ static inline bool arch_virq_is_global(unsigned int virq)
     return true;
 }
 
+void vcpu_kick(struct vcpu *vcpu);
+
 #endif
 /*
  * Local variables:

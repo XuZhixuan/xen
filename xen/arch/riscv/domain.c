@@ -9,6 +9,7 @@
 #include <asm/gic.h>
 #include <asm/p2m.h>
 #include <asm/riscv_encoding.h>
+#include <asm/sbi.h>
 #include <asm/traps.h>
 #include <asm/vplic.h>
 #include <asm/vtimer.h>
@@ -430,4 +431,16 @@ void arch_vcpu_destroy(struct vcpu *v)
 struct vcpu *alloc_dom0_vcpu0(struct domain *dom0)
 {
     return vcpu_create(dom0, 0);
+}
+
+void vcpu_kick(struct vcpu *vcpu)
+{
+    bool running = vcpu->is_running;
+
+    vcpu_unblock(vcpu);
+    if ( running && vcpu != current )
+    {
+        perfc_incr(vcpu_kick);
+        smp_send_event_check_mask(cpumask_of(vcpu->processor));
+    }
 }
