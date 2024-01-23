@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * xen/arch/riscv/insclude/asm/vsbi.h
  *
- *  Handle sbi calls from guest
+ * Handle sbi calls from guest
  *
  * Copyright (c) 2024 Microchip.
  *

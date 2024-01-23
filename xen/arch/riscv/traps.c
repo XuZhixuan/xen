@@ -22,6 +22,7 @@
 #include <asm/traps.h>
 #include <asm/vplic.h>
 #include <asm/vtimer.h>
+#include <asm/vsbi.h>
 #include <asm/vsbi_uart.h>
 
 #define cast_to_bug_frame(addr) \
@@ -411,43 +412,6 @@ void timer_interrupt(unsigned long cause, struct cpu_user_regs *regs)
     raise_softirq(TIMER_SOFTIRQ);
 }
 
-static void guest_sbi_set_timer(struct cpu_user_regs *regs)
-{
-    struct vcpu *v = current;
-    vtimer_set_timer(&v->arch.vtimer, regs->a0);
-    regs->a0 = 0;
-}
-
-static void guest_sbi_ext_base(struct cpu_user_regs *regs)
-{
-    unsigned long fid = regs->a6;
-
-    switch (fid)
-    {
-    case SBI_EXT_BASE_GET_SPEC_VERSION:
-        regs->a0 = 0;
-        regs->a1 = sbi_spec_version;
-        break;
-    case SBI_EXT_BASE_GET_IMP_ID:
-        regs->a0 = 0;
-        regs->a1 = sbi_fw_id;
-        break;
-    case SBI_EXT_BASE_GET_IMP_VERSION:
-        regs->a0 = 0;
-        regs->a1 = sbi_fw_version;
-        break;
-    case SBI_EXT_BASE_PROBE_EXT:
-        regs->a1 = sbi_probe_extension(regs->a0);
-        regs->a0 = 0;
-        break;
-
-    default:
-        printk("%s: Unsupport FID #%ld\n", __func__, fid);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    }
-}
-
 // static inline void riscv_cpuid_to_hartid_mask(const struct cpumask *in,
 // 					      struct cpumask *out)
 // {
@@ -455,98 +419,9 @@ static void guest_sbi_ext_base(struct cpu_user_regs *regs)
 // 	cpumask_set_cpu(0, out);
 // }
 
-static void guest_sbi_rfence(struct cpu_user_regs *regs)
-{
-    unsigned long fid = regs->a6;
-
-    switch (fid)
-    {
-    case SBI_EXT_RFENCE_REMOTE_FENCE_I:
-        {
-            sbi_remote_fence_i((const unsigned long *)&regs->a0);
-            regs->a0 = SBI_SUCCESS;
-
-            break;
-        }
-    case SBI_EXT_RFENCE_REMOTE_SFENCE_VMA:
-        {
-            sbi_remote_sfence_vma(&regs->a0, regs->a1, regs->a2);
-            regs->a0 = SBI_SUCCESS;
-
-            break;
-        }
-
-    default:
-        printk("%s: Unsupport FID #%ld\n", __func__, fid);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    }
-}
-
 static inline void advance_pc(struct cpu_user_regs *regs, int step)
 {
     regs->sepc += step;
-}
-
-static void handle_guest_sbi(struct cpu_user_regs *regs)
-{
-    unsigned long eid = regs->a7;
-
-    switch ( eid )
-    {
-    case SBI_EXT_TIME:
-    case SBI_EXT_0_1_SET_TIMER:
-        guest_sbi_set_timer(regs);
-        break;
-    case SBI_EXT_0_1_CONSOLE_PUTCHAR:
-        vsbi_uart_putchar(regs);
-        break;
-    case SBI_EXT_0_1_CONSOLE_GETCHAR:
-        vsbi_uart_getchar(regs);
-        break;
-    case SBI_EXT_0_1_CLEAR_IPI:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_CLEAR_IPI\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_0_1_SEND_IPI:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_SEND_IPI\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_0_1_SHUTDOWN:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_SHUTDOWN\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_0_1_REMOTE_FENCE_I:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_FENCE_I\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_0_1_REMOTE_SFENCE_VMA:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_SFENCE_VMA\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID\n",
-               __FILE__, __LINE__);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    case SBI_EXT_BASE:
-        guest_sbi_ext_base(regs);
-        break;
-    case SBI_EXT_RFENCE:
-        guest_sbi_rfence(regs);
-        break;
-    default:
-        printk("UNKNOWN Guest SBI extension id 0x%lx, FID #%lu\n", eid, regs->a1);
-        regs->a0 = SBI_ERR_NOT_SUPPORTED;
-        break;
-    };
-
-    advance_pc(regs, 4);
 }
 
 static inline unsigned long get_faulting_gpa(void)
@@ -748,6 +623,11 @@ static int emulate_store(struct vcpu *vcpu, unsigned long fault_addr,
     return 0;
 }
 
+static void handle_guest_sbi_ecall(struct cpu_user_regs *regs)
+{
+    vsbi_handle_ecall(current, regs);
+}
+
 static void handle_guest_page_fault(unsigned long cause, struct cpu_user_regs *regs)
 {
     unsigned long addr;
@@ -809,7 +689,7 @@ void do_trap(struct cpu_user_regs *cpu_regs)
         switch ( cause )
         {
         case CAUSE_VIRTUAL_SUPERVISOR_ECALL:
-            handle_guest_sbi(cpu_regs);
+            handle_guest_sbi_ecall(cpu_regs);
             break;
         case CAUSE_LOAD_GUEST_PAGE_FAULT:
         case CAUSE_STORE_GUEST_PAGE_FAULT:

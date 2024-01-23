@@ -33,6 +33,7 @@ obj-y += vaplic.o
 obj-y += vm_event.o
 obj-y += vplic.o
 obj-y += vtimer.o
+obj-y += vsbi.o
 obj-y += vsbi_uart.o
 
 $(TARGET): $(TARGET)-syms
