@@ -1108,7 +1108,11 @@ void __init console_init_irq(void)
 
 void __init console_init_postirq(void)
 {
+#ifndef MCHP_HWEMU
+    /* TODO : to review, WARNING !!! need to be commented for HW emulation platform
+       otherwise the uart ouput will be very slow */
     serial_init_postirq();
+#endif
     pv_console_init_postirq();
 
     if ( conring != _conring )

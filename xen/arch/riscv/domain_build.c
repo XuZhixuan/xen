@@ -1302,8 +1302,16 @@ static int __init construct_dom0(struct domain *d)
 
     if ( dom0_mem <= 0 )
     {
+#ifdef MCHP_HWEMU
+        /* TO REMOVE: Even if I can give this parameter to xen, it will not possible with
+         * the hardware emulation platform. Ugly tempporary fix
+         */
+        warning_add("PLEASE SPECIFY dom0_mem PARAMETER - USING 16M FOR NOW\n");
+        dom0_mem = MB(16);
+#else
         warning_add("PLEASE SPECIFY dom0_mem PARAMETER - USING 512M FOR NOW\n");
         dom0_mem = MB(512);
+#endif
     }
 
     d->max_pages = dom0_mem >> PAGE_SHIFT;
