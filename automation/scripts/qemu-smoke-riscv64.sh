@@ -6,9 +6,10 @@ set -ex
 rm -f smoke.serial
 set +e
 
-FW_PATH=binaries/opensbi-riscv64-generic-fw_dynamic.bin
-QEMU=./binaries/qemu-system-riscv64
-XEN=./binaries/xen
+BUILDDIR=./binaries
+FW_PATH=${BUILDDIR}/opensbi-riscv64-generic-fw_dynamic.bin
+QEMU=${BUILDDIR}/qemu-system-riscv64
+XEN=${BUILDDIR}/xen
 
 TEST_CASE=$1
 
@@ -16,6 +17,8 @@ TEST_CASE=$1
 declare -A PLATFORM_DATA
 declare -A DOMU_DATA
 declare -A DOM0_DATA
+
+# guest_domain_num=0
 
 get_kernel_node() {
     local kernel_la="${1}"
@@ -27,6 +30,7 @@ get_kernel_node() {
     if [ -f "$kernel_path" ]; then
         kernel_size=$(stat -c %s "$kernel_path")
         kernel_size_hex=$(printf "0x%x" "$kernel_size")
+        # echo "File size of $kernel_path: $kernel_size bytes"
     else
         echo "Error: kernel path [$kernel_path] is wrong"
         exit 1
@@ -51,6 +55,7 @@ get_ramdisk_node() {
     if [ -f "$ramdisk_path" ]; then
         ramdisk_size=$(stat -c %s "$ramdisk_path")
         ramdisk_size_hex=$(printf "0x%x" "$ramdisk_size")
+        # echo "File size of $ramdisk_path: $ramdisk_size bytes"
     else
         echo "Error: ramdisk path [$ramdisk_path] is wrong"
         exit 1
@@ -82,6 +87,56 @@ get_platform_val() {
     local key=$1
 
     echo "${PLATFORM_DATA[$key]}"
+}
+
+generate_qemu_pfdt_flags()
+{
+    local platform_guest_dom_num=PLATFORM_DATA["GUEST_DOM_NUM"]
+    local qemu_pfdt_flags=""
+
+    for ((i=1; i<=$platform_guest_dom_num; i++)); do
+    local pfdt_path=$(get_domu_val "DOMU$i" "PFDT_PATH")
+    local pfdt_addr=$(get_domu_val "DOMU$i" "PFDT_ADDR")
+
+    # echo "[$pfdt_path] [$pfdt_addr]"
+
+    if [ "$pfdt_addr" != "0x0" ]; then
+        pfdt_path="${pfdt_path%?}b"
+        qemu_pfdt_flags+="-device loader,file=$pfdt_path,addr=$pfdt_addr "
+    fi
+     done
+
+    echo "$qemu_pfdt_flags"
+}
+
+generate_pfdt_node()
+{
+    local dom_id=$1
+
+    local pfdt_dtb_addr=$(get_domu_val "$dom_id" "PFDT_ADDR")
+    local pfdt_dts_path=$(get_domu_val "$dom_id" "PFDT_PATH")
+
+    if [ -f "$pfdt_dts_path" ]; then
+        local pfdt_dtb_path=${pfdt_dts_path%?}b
+        local pfdt_dtb_name=$(basename "$pfdt_dtb_path")
+
+        dtc -O dtb -o ${BUILDDIR}/$pfdt_dtb_name $pfdt_dts_path
+
+        pfdt_dtb_size=$(stat -c %s "${BUILDDIR}/$pfdt_dtb_name")
+        pfdt_dtb_size_hex=$(printf "0x%x" "$pfdt_dtb_size")
+    else
+        echo ""
+        return 0
+    fi
+
+    local pfdt_node="
+        module@$pfdt_dtb_addr {
+            compatible = \"multiboot,device-tree\", \"multiboot,module\";
+            reg = <$pfdt_dtb_addr $pfdt_dtb_size_hex>;
+        };
+        "
+
+    echo "$pfdt_node"
 }
 
 generate_domu()
@@ -117,6 +172,8 @@ generate_domu()
 
     local ramdisk_module_node=$(get_ramdisk_node "$ramdisk_la" "$ramdisk_path")
 
+    local pfdt_node=$(generate_pfdt_node "$dom_id")
+
     local guest_node=$(cat <<EOF
     ${dom_id} {
         #address-cells = <1>;
@@ -129,6 +186,8 @@ generate_domu()
         ${kernel_module_node}
 
         ${ramdisk_module_node}
+
+        ${pfdt_node}
     };
 EOF
 )
@@ -148,18 +207,25 @@ generate_base_dts() {
     local platform_cpu_num=$(get_platform_val CPU_NUM)
     local platform_ram_size=$(get_platform_val RAM_SIZE)
     local platform_interrupt_controller=$(get_platform_val INTERRUPT_CONTROLLER)
-    local dts_name="./binaries/qemu"
+    local dts_name="qemu"
     local xen_boot_args=$(get_platform_val XEN_BOOTARGS)
+
+    local ic_flags=""
+    case $platform_interrupt_controller in
+        aplic-imsic)
+            ic_flags=",aclint=off,aia=aplic-imsic,aia-guests=7 -cpu rv64,smstateen=on"
+            ;;
+    esac
 
     case $platform_name in
         dom0less-qemu-virt)
-            ${QEMU} -M virt -smp $platform_cpu_num -nographic \
+            ${QEMU} -M virt$ic_flags -smp $platform_cpu_num -nographic \
                     -bios ${FW_PATH} \
                     -append "${xen_boot_args}" -kernel ${XEN} \
-                    -m $platform_ram_size -machine dumpdtb=$dts_name.dtb
-            dtc -I dtb ${dts_name}.dtb > "${dts_name}.dts"
-            remove_unsupported_nodes ${dts_name}
-            rm $dts_name.dtb
+                    -m $platform_ram_size -machine dumpdtb=${BUILDDIR}/$dts_name.dtb
+            dtc -I dtb ${BUILDDIR}/${dts_name}.dtb > "${BUILDDIR}/${dts_name}.dts"
+            remove_unsupported_nodes ${BUILDDIR}/${dts_name}
+            rm ${BUILDDIR}/$dts_name.dtb
             ;;
         dom0-qemu-virt)
             local kernel_path=$(get_dom0_val KERNEL_PATH)
@@ -168,16 +234,16 @@ generate_base_dts() {
             local ramdisk_addr=$(get_dom0_val RAMDISK_ADDR)
             local boot_args=$(get_dom0_val BOOTARGS)
 
-            "${QEMU}" -M virt -smp "${platform_cpu_num}" -nographic \
+            "${QEMU}" -M virt$ic_flags -smp "${platform_cpu_num}" -nographic \
                       -bios ${FW_PATH} \
                       -m "${platform_ram_size}" \
                       -device "guest-loader,kernel=${kernel_path},addr=${kernel_addr},bootargs=${boot_args}" \
                       -device "guest-loader,initrd=${ramdisk_path},addr=${ramdisk_addr}" \
                       -append "${xen_boot_args}" -kernel ${XEN} \
-                      -machine dumpdtb=${dts_name}.dtb
-            dtc -I dtb ${dts_name}.dtb > "${dts_name}.dts"
-            remove_unsupported_nodes ${dts_name}
-            rm $dts_name.dtb
+                      -machine dumpdtb=${BUILDDIR}/${dts_name}.dtb
+            dtc -I dtb ${BUILDDIR}/${dts_name}.dtb > "${BUILDDIR}/${dts_name}.dts"
+            remove_unsupported_nodes ${BUILDDIR}/${dts_name}
+            rm ${BUILDDIR}/$dts_name.dtb
             ;;
         *)
             echo "Add dtb generation command for $platform_name"
@@ -185,7 +251,7 @@ generate_base_dts() {
             ;;
     esac
 
-    echo "$dts_name.dts"
+    echo "${BUILDDIR}/$dts_name.dts"
 }
 
 generate_dtb() {
@@ -224,9 +290,9 @@ generate_dtb() {
     fi
 
     # generate dtb
-    dtb_name=./binaries/$(get_platform_val NAME).dtb
+    dtb_name="$(get_platform_val NAME)".dtb
 
-    dtc -O dtb -o $dtb_name $dts_name 
+    dtc -O dtb -o ${BUILDDIR}/${dtb_name} $dts_name
 }
 
 check_and_set_platform_data_default() {
@@ -243,7 +309,7 @@ check_and_set_platform_data_default() {
 process_platform_data() {
     echo "Processing PLATFORM data:"
 
-    check_and_set_platform_data_default "NAME" "dom0less-qemu-virt"
+    check_and_set_platform_data_default "NAME" "qemu-virt"
     check_and_set_platform_data_default "RAM_SIZE" "4g"
     check_and_set_platform_data_default "CPU_NUM" "1"
     check_and_set_platform_data_default "XEN_BOOTARGS" ""
@@ -254,7 +320,6 @@ process_platform_data() {
     for key in "${!PLATFORM_DATA[@]}"; do
         value="${PLATFORM_DATA[$key]}"
         echo "$key: $value"
-        # Add your actions here
     done
 
     echo "PLATFORM data processing complete."
@@ -312,11 +377,18 @@ process_dom0_data() {
 # Function to process DOMU data
 process_domu_data() {
     local platform_guest_dom_num=PLATFORM_DATA["GUEST_DOM_NUM"]
+    # echo $platform_guest_dom_num
+
+    # platform_guest_dom_num=$((platform_guest_dom_num))
+
+    echo "process_domu_data"
 
     for ((i=1; i<=$platform_guest_dom_num; i++)); do
         check_and_set_domu_data_default "DOMU$i" VSBI_UART false
         check_and_set_domu_data_default "DOMU$i" CPUS_NUM 1
         check_and_set_domu_data_default "DOMU$i" BOOTARGS ""
+        check_and_set_domu_data_default "DOMU$i" PFDT_PATH ""
+        check_and_set_domu_data_default "DOMU$i" PFDT_ADDR 0x0
 
         check_and_failure_domu_data "DOMU$i" KERNEL_ADDR
         check_and_failure_domu_data "DOMU$i" KERNEL_PATH
@@ -361,7 +433,6 @@ parse_config_file() {
                 DOMU_DATA["$prefix","$rest"]=$value
                 ;;
             DOM0*)
-                echo "${rest}=${value}"
                 DOM0_DATA["$rest"]=$value
                 ;;
             # Add more cases for other sections as needed
@@ -462,6 +533,9 @@ cat "${CONFIG_FILE}"
 
 parse_config_file
 generate_dtb
+
+pfdt_qemu_flags=$(generate_qemu_pfdt_flags)
+echo "FLAGS: $pfdt_qemu_flags"
 
 case "${TEST_CASE}" in
     "dom0-test" | "dom0-smp-test")
