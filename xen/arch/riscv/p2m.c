@@ -225,7 +225,7 @@ int guest_physmap_add_entry(struct domain *d,
         paddr_t guest_addr = guest_start + (i * PAGE_SIZE);
         paddr_t supervisor_addr = mfn_to_maddr(mfn) + (i * PAGE_SIZE);
         pt_update(root, guest_addr, supervisor_addr, false,
-                  d, PTE_READABLE | PTE_WRITABLE | PTE_EXECUTABLE | PTE_USER);
+                  d, PTE_READABLE | PTE_WRITABLE | PTE_EXECUTABLE | PTE_USER | PTE_DIRTY | PTE_ACCESSED);
 
         /* Remove this after pt_update/pt_walk stand the test of time */
         BUG_ON(pt_walk(root, guest_addr, false) != supervisor_addr);

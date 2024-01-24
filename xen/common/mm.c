@@ -291,6 +291,10 @@ static int xen_pt_update_entry(mfn_t root, unsigned long virt,
         set_pte_permissions(&pte, flags);
     }
 
+#ifdef CONFIG_RISCV
+    pte.pte |= PTE_ACCESSED | PTE_DIRTY;
+#endif
+
     write_pte(entry, pte);
 
     rc = 0;

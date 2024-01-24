@@ -32,7 +32,7 @@
 #define PTE_DIRTY                   BIT(7, UL)
 #define PTE_RSW                     (BIT(8, UL) | BIT(9, UL))
 
-#define PTE_LEAF_DEFAULT            (PTE_VALID | PTE_READABLE | PTE_WRITABLE)
+#define PTE_LEAF_DEFAULT            (PTE_VALID | PTE_READABLE | PTE_WRITABLE | PTE_ACCESSED | PTE_DIRTY)
 #define PTE_TABLE                   (PTE_VALID)
 
 /* Calculate the offsets into the pagetables for a given VA */

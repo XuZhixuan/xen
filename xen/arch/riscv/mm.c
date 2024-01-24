@@ -145,10 +145,10 @@ static void __init setup_initial_mapping(struct mmu_desc *mmu_desc,
                 if ( is_kernel_text(addr) ||
                      is_kernel_inittext(addr) )
                         permissions =
-                            PTE_EXECUTABLE | PTE_READABLE | PTE_VALID;
+                            PTE_EXECUTABLE | PTE_READABLE | PTE_VALID | PTE_ACCESSED;
 
                 if ( is_kernel_rodata(addr) )
-                    permissions = PTE_READABLE | PTE_VALID;
+                    permissions = PTE_READABLE | PTE_VALID | PTE_ACCESSED;
 
                 pte_to_be_written = paddr_to_pte(paddr, permissions);
 
