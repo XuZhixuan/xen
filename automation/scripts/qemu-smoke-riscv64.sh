@@ -522,6 +522,69 @@ case "${TEST_CASE}" in
         DOMU2_CPUS_NUM=1
         DOMU2_BOOTARGS=\"console=hvc0\"" > "${CONFIG_FILE}"
         ;;
+    "dom0less-4smp-1domu-2vcpu-aplic-msic-test")
+        PLATFORM_PCPU_NUM=4
+
+        CONFIG_FILE="dom0less.conf"
+        PLATFORM_NAME=dom0less-qemu-virt
+        PLATFORM_RAM_SIZE=2g
+        DOMU1_KERNEL_ADDR=0x808ef000
+        DOMU1_KERNEL_PATH=./binaries/Image.gz
+        DOMU1_RAMDISK_ADDR=0x90400000
+        DOMU1_RAMDISK_PATH=./binaries/initrd.img
+        DOMU1_PFDT_PATH="./binaries/pfdt-domu1.dts"
+        DOMU1_PFDT_ADDR=0x9A000000
+
+        # create pfdt-domu1.dts
+        echo '/dts-v1/;' > ${DOMU1_PFDT_PATH}
+        echo '' >> ${DOMU1_PFDT_PATH}
+        echo '/ {' >> ${DOMU1_PFDT_PATH}
+        echo '    #address-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '    #size-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '' >> ${DOMU1_PFDT_PATH}
+        echo '    gic: gic {' >> ${DOMU1_PFDT_PATH}
+        echo '        /* add adress and size cells to make DTC happy */' >> ${DOMU1_PFDT_PATH}
+        echo '        #interrupt-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '        #address-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '        #size-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '        interrupt-controller;' >> ${DOMU1_PFDT_PATH}
+        echo '    };' >> ${DOMU1_PFDT_PATH}
+        echo '' >> ${DOMU1_PFDT_PATH}
+        echo '    passthrough {' >> ${DOMU1_PFDT_PATH}
+        echo '        #address-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '        #size-cells = <2>;' >> ${DOMU1_PFDT_PATH}
+        echo '        compatible = "simple-bus";' >> ${DOMU1_PFDT_PATH}
+        echo '        ranges;' >> ${DOMU1_PFDT_PATH}
+        echo '' >> ${DOMU1_PFDT_PATH}
+        echo '        fakedev-irq@e000000 {' >> ${DOMU1_PFDT_PATH}
+        echo '            compatible = "mchp,fakedev-irq";' >> ${DOMU1_PFDT_PATH}
+        echo '            reg = <0x0 0xe000000 0x0 0x1000>;' >> ${DOMU1_PFDT_PATH}
+        echo '            interrupt-parent = <&gic>;' >> ${DOMU1_PFDT_PATH}
+        echo '            interrupts = <12 4 13 4>;' >> ${DOMU1_PFDT_PATH}
+        echo '            xen,reg = <0x0 0xe000000 0x0 0x1000 0x0 0xe000000>;' >> ${DOMU1_PFDT_PATH}
+        echo '            xen,force-assign-without-iommu;' >> ${DOMU1_PFDT_PATH}
+        echo '        };' >> ${DOMU1_PFDT_PATH}
+        echo '    };' >> ${DOMU1_PFDT_PATH}
+        echo '};' >> ${DOMU1_PFDT_PATH}
+
+        echo "PLATFORM_NAME=\"${PLATFORM_NAME}\"
+        PLATFORM_CPU_NUM=\"${PLATFORM_PCPU_NUM}\"
+        PLATFORM_RAM_SIZE=\"${PLATFORM_RAM_SIZE}\"
+        PLATFORM_XEN_BOOTARGS=com1=poll sched=null
+        PLATFORM_INTERRUPT_CONTROLLER=aplic-imsic
+        PLATFORM_GUEST_DOM_NUM=1
+        PLATFORM_DOM0LESS=true
+
+        DOMU1_KERNEL_ADDR=\"${DOMU1_KERNEL_ADDR}\"
+        DOMU1_KERNEL_PATH=\"${DOMU1_KERNEL_PATH}\"
+        DOMU1_VSBI_UART=true
+        DOMU1_RAMDISK_ADDR=\"${DOMU1_RAMDISK_ADDR}\"
+        DOMU1_RAMDISK_PATH=\"${DOMU1_RAMDISK_PATH}\"
+        DOMU1_PFDT_PATH=\"${DOMU1_PFDT_PATH}\"
+        DOMU1_PFDT_ADDR=\"${DOMU1_PFDT_ADDR}\"
+        DOMU1_CPUS_NUM=2
+        DOMU1_BOOTARGS=\"console=hvc0\"" > ${CONFIG_FILE}
+        ;;
     *)
         echo "Invalid option: $value"
         # Handle invalid options
@@ -570,6 +633,22 @@ case "${TEST_CASE}" in
                 |& tee smoke.serial
         set -e
         [[ $(grep -c "Hello RISC-V World!" smoke.serial) -eq 2 ]] || exit 1
+        ;;
+    "dom0less-4smp-1domu-2vcpu-aplic-msic-test")
+        timeout -k 1 140 \
+        ${QEMU} -M virt,aclint=off,aia=aplic-imsic,aia-guests=7 -cpu rv64,smstateen=on \
+                -bios ${FW_PATH} \
+                -smp ${PLATFORM_PCPU_NUM} \
+                -nographic \
+                -m ${PLATFORM_RAM_SIZE} \
+                -kernel ${XEN} \
+                -device "loader,file=${DOMU1_KERNEL_PATH},addr=${DOMU1_KERNEL_ADDR}" \
+                -device "loader,file=${DOMU1_RAMDISK_PATH},addr=${DOMU1_RAMDISK_ADDR}" \
+                ${pfdt_qemu_flags} \
+                -dtb ./binaries/${PLATFORM_NAME}.dtb \
+                |& tee smoke.serial
+        set -e
+        [[ $(grep -c "AIA IS OK" smoke.serial) -eq 1 ]] || exit 1
         ;;
     *)
         echo "Invalid option: ${TEST_CASE}"
