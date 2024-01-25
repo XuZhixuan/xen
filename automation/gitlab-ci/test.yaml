@@ -26,6 +26,7 @@
 
 .riscv64-aia-test-needs: &riscv64-aia-test-needs
   - kernel-6.6-aia-support-riscv64-export
+  - qemu-system-riscv64-8.2.0-aia-riscv64-export
 
 .qemu-arm64:
   extends: .test-jobs-common

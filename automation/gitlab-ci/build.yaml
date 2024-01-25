@@ -359,6 +359,18 @@ kernel-6.6-aia-support-riscv64-export:
   tags:
     - x86_64
 
+qemu-system-riscv64-8.2.0-aia-riscv64-export:
+  extends: .test-jobs-artifact-common
+  image: registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/qemu-system-riscv64:8.2.0-aia-riscv64
+  script:
+    - mkdir binaries && cp /qemu-system-riscv64 /opensbi-riscv64-generic-fw_dynamic.bin binaries/
+  artifacts:
+    paths:
+      - binaries/qemu-system-riscv64
+      - binaries/opensbi-riscv64-generic-fw_dynamic.bin
+  tags:
+    - x86_64
+
 # Jobs below this line
 
 # Build jobs needed for tests
