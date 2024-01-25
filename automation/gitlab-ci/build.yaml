@@ -348,6 +348,17 @@ qemu-system-riscv64-8.2.0-riscv64-export:
   tags:
     - x86_64
 
+kernel-6.6-aia-support-riscv64-export:
+  extends: .test-jobs-artifact-common
+  image: registry.gitlab.com/xen-project/people/olkur/xen/tests-artifacts/kernel:6.6-aia-support-riscv64
+  script:
+    - mkdir binaries && cp /Image.gz binaries/Image.gz
+  artifacts:
+    paths:
+      - binaries/Image.gz
+  tags:
+    - x86_64
+
 # Jobs below this line
 
 # Build jobs needed for tests

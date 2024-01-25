@@ -24,6 +24,9 @@
   - kernel-6.4-riscv64-export
   - busybox-1.31.6-riscv64-rootfs-export
 
+.riscv64-aia-test-needs: &riscv64-aia-test-needs
+  - kernel-6.6-aia-support-riscv64-export
+
 .qemu-arm64:
   extends: .test-jobs-common
   variables:
