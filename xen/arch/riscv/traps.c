@@ -401,6 +401,8 @@ void leave_hypervisor_to_guest(void)
     local_irq_disable();
 
     check_for_pcpu_work();
+
+    context_restore_csrs(current);
 }
 
 void timer_interrupt(unsigned long cause, struct cpu_user_regs *regs)
@@ -670,7 +672,8 @@ void do_trap(struct cpu_user_regs *cpu_regs)
                 return;
             }
         }
-    }
+    } else
+        enter_hypervisor_from_guest();
 
     if ( cause & CAUSE_IRQ_FLAG )
     {
