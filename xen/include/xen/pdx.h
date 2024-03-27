@@ -40,6 +40,15 @@ static inline unsigned long pdx_to_pfn(unsigned long pdx)
 
 extern void pfn_pdx_hole_setup(unsigned long);
 
+static inline unsigned long maddr_to_directmapoff(paddr_t ma) {
+    return (((ma & ma_top_mask) >> pfn_pdx_hole_shift) |
+            (ma & ma_va_bottom_mask));
+}
+
+static inline paddr_t directmapoff_to_maddr(unsigned long offset) {
+    return ((((paddr_t)offset << pfn_pdx_hole_shift) & ma_top_mask) |
+            (offset & ma_va_bottom_mask)); }
+
 #endif /* HAS_PDX */
 #endif /* __XEN_PDX_H__ */
 

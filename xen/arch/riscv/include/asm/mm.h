@@ -215,6 +215,27 @@ paddr_t __virt_to_maddr(vaddr_t va);
 
 #define virt_to_maddr(va) __virt_to_maddr((vaddr_t) (va))
 
+/* TODO: possible confusion with the function above
+ *       check with Oleksii for renaming functions
+ *       these functions are for Xen only (used in iommu) 
+ */
+#define _virt_to_maddr(va)   _iommu_virt_to_maddr((unsigned long)(va))
+#define _maddr_to_virt(ma)   _iommu_maddr_to_virt((unsigned long)(ma))
+
+static inline unsigned long _iommu_virt_to_maddr(unsigned long va) {
+    ASSERT(va < DIRECTMAP_VIRT_END);
+    if ( va >= DIRECTMAP_VIRT_START )
+        return RAM_BASE + directmapoff_to_maddr(va - DIRECTMAP_VIRT_START);
+    panic("XEN VIRT TO MADDR FAILED\n");
+}
+
+static inline unsigned long _iommu_maddr_to_virt(unsigned long ma) {
+    ASSERT((mfn_to_pdx(maddr_to_mfn(ma)) - directmap_base_pdx) <
+           (DIRECTMAP_SIZE >> PAGE_SHIFT));
+    return (XENHEAP_VIRT_START - (directmap_base_pdx << PAGE_SHIFT) +
+            maddr_to_directmapoff(ma));
+}
+
 /* Convert between Xen-heap virtual addresses and machine frame numbers. */
 #define __virt_to_mfn(va)  paddr_to_pfn((vaddr_t)va)
 #define __mfn_to_virt(mfn) (maddr_to_virt((paddr_t)(mfn) << PAGE_SHIFT))

@@ -146,6 +146,8 @@
 
 #define HYP_PT_ROOT_LEVEL (CONFIG_PAGING_LEVELS - 1)
 
+#define RAM_BASE  0x4000000000
+
 #endif /* __RISCV_CONFIG_H__ */
 /*
  * Local variables:

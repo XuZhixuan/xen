@@ -514,8 +514,8 @@ static int emulate_load(struct vcpu *vcpu, unsigned long fault_addr,
 	if (fault_addr & (len - 1))
 		return -EIO;
 
-    printk("emulating load: pc=0x%02lx, addr=0x%02lx, len=%d, shift=%d\n",
-            guest_cpu_user_regs()->sepc, fault_addr, len, shift);
+    // printk("emulating load: pc=0x%02lx, addr=0x%02lx, len=%d, shift=%d\n",
+    //         guest_cpu_user_regs()->sepc, fault_addr, len, shift);
 
     if ( vgic->is_access(vcpu, fault_addr) )
     {

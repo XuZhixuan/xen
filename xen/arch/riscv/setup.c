@@ -117,7 +117,7 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
     size_t fdt_size;
     const char *cmdline;
     struct domain *d;
-    unsigned int i;
+    unsigned int i, rc;
 
     /*
      * tp register contains an address of physical cpu information.
@@ -222,6 +222,10 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
                 printk("Failed to bring up CPU %u (error %d)\n", i, ret);
         }
     }
+
+    rc = iommu_setup();
+    if ( !iommu_enabled && rc != -ENODEV )
+        panic("Couldn't configure correctly all the IOMMUs.\n");
 
     /*
      * identity mapping should be removed after bring up CPUs as there is

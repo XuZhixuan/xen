@@ -12,6 +12,7 @@ config RISCV_64
 	select HAS_PDX
 	select HAS_PMAP
 	select MM
+	select HAS_PASSTHROUGH
 
 config ARCH_DEFCONFIG
 	string

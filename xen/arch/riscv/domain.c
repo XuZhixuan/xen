@@ -155,6 +155,9 @@ int arch_domain_create(struct domain *d,
     if ( is_idle_domain(d) )
         return 0;
 
+    if ( (rc = iommu_domain_init(d, config->iommu_opts)) != 0 )
+        goto fail;
+
     if ( (rc = p2m_init(d)) != 0)
         goto fail;
 

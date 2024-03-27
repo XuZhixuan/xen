@@ -1583,19 +1583,15 @@ static int __init handle_passthrough_prop(struct kernel_info *kinfo,
     if ( res < 0 )
         return res;
 
-    return res;
+    res = iommu_add_dt_device(node);
+    if ( res < 0 )
+        return res;
 
-    // // res = iommu_add_dt_device(node);
-    // // if ( res < 0 )
-    // //     return res;
-
-    // /* If xen_force, we allow assignment of devices without IOMMU protection. */
-    // if ( xen_force && !dt_device_is_protected(node) )
-    //     return 0;
-    // else {
-    //     panic("TODO: IOMMU is not implemented");
-    // }
-    // return iommu_assign_dt_device(kinfo->d, node);
+    /* If xen_force, we allow assignment of devices without IOMMU protection. */
+    if ( xen_force && !dt_device_is_protected(node) )
+        return 0;
+        
+    return iommu_assign_dt_device(kinfo->d, node);
 }
 
 static int __init handle_prop_pfdt(struct kernel_info *kinfo,
@@ -1742,8 +1738,11 @@ static int __init scan_pfdt_node(struct kernel_info *kinfo, const void *pfdt,
     node_next = fdt_first_subnode(pfdt, nodeoff);
     while ( node_next > 0 )
     {
-        scan_pfdt_node(kinfo, pfdt, node_next, address_cells, size_cells,
+        rc = scan_pfdt_node(kinfo, pfdt, node_next, address_cells, size_cells,
                        scan_passthrough_prop);
+        if ( rc )
+            return rc;
+        
         node_next = fdt_next_subnode(pfdt, node_next);
     }
 

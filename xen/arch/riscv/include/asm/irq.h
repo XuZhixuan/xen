@@ -38,6 +38,7 @@ extern const unsigned int nr_irqs;
 #define arch_evtchn_bind_pirq(d, pirq) ((void)((d) + (pirq)))
 
 int platform_get_irq(const struct dt_device_node *device, int index);
+int platform_get_irq_byname(const struct dt_device_node *np, const char *name);
 
 #endif /* _ASM_HW_IRQ_H */
 /*
