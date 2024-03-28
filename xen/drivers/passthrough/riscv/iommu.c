@@ -137,9 +137,8 @@ static void riscv_iommu_print_dc(void *ddtp, unsigned int level, bool dc,
 static void __maybe_unused
 riscv_iommu_dump_dc(struct riscv_iommu_device *iommu_dev)
 {
-    unsigned int level = iommu_dev->ddt_mode - RISCV_IOMMU_DDTP_MODE_1LVL;
     printk("-------- DDT DUMP START --------\n");
-    riscv_iommu_print_dc(iommu_dev->ddtp, level, iommu_dev->extended_dc, 0, 0);
+    riscv_iommu_print_dc(iommu_dev->ddtp, iommu_dev->level, iommu_dev->extended_dc, 0, 0);
     printk("-------- DDT DUMP END --------\n");
 }
 #endif /* CONFIG_DEBUG */
@@ -402,7 +401,7 @@ riscv_iommu_get_dc(struct riscv_iommu_device *iommu_dev, unsigned int device_id)
 {
     const struct riscv_iommu_ddt_level *levels =
         iommu_dev->extended_dc ? level_ext : level_base;
-    unsigned int level = iommu_dev->ddt_mode - RISCV_IOMMU_DDTP_MODE_1LVL;
+    unsigned int level = iommu_dev->level;
     void *ddtp = iommu_dev->ddtp;
 
     /* check device ID */
@@ -885,42 +884,40 @@ static const struct iommu_ops riscv_iommu_ops = {
 
 static int riscv_iommu_custom_init(struct riscv_iommu_device *iommu_dev)
 {
-#ifdef CONFIG_SIFIVE_IOMMU22
-    uint32_t val;
+    if ( is_sifive_iommu_22(iommu_dev) ) {
+        uint32_t val;
 
-    val = iommu_read32(iommu_dev, RISCV_IOMMU_REG_CUSTOM_VID);
-    if ( val != RISCV_IOMMU_CUSTOM_VID_DEFAULT )
-    {
-        dev_err(iommu_dev->dev,
-                "Wrong IOMMU SiFive Version ID\n");
-        return -EINVAL;
+        val = iommu_read32(iommu_dev, RISCV_IOMMU_REG_CUSTOM_VID);
+        if ( val != RISCV_IOMMU_CUSTOM_VID_DEFAULT )
+        {
+            dev_err(iommu_dev->dev,
+                    "Wrong IOMMU SiFive Version ID\n");
+            return -EINVAL;
+        }
+
+        val = FIELD_PREP(RISCV_IOMMU_CUSTOM_TIMEOUT, 4) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_MPAGE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_GPAGE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_TPAGE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_PPAGE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_PTE_DISABLE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_CTE_DISABLE, 0) |
+              FIELD_PREP(RISCV_IOMMU_CUSTOM_CG_DIS, 1);
+
+        iommu_write32(iommu_dev, RISCV_IOMMU_REG_CUSTOM, val);
+
+        /* Tiled to 0 for IOMMU-22 */
+        val = iommu_read32(iommu_dev, RISCV_IOMMU_REG_FCTL);
+        if ( FIELD_GET(RISCV_IOMMU_FCTL_GXL, val) )
+            return -EINVAL;
     }
-
-    val = FIELD_PREP(RISCV_IOMMU_CUSTOM_TIMEOUT, 4) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_MPAGE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_GPAGE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_TPAGE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_PPAGE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_PTE_DISABLE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_CTE_DISABLE, 0) |
-          FIELD_PREP(RISCV_IOMMU_CUSTOM_CG_DIS, 1);
-
-    iommu_write32(iommu_dev, RISCV_IOMMU_REG_CUSTOM, val);
-
-    /* Tiled to 0 for IOMMU-22 */
-    val = iommu_read32(iommu_dev, RISCV_IOMMU_REG_FCTL);
-    if ( FIELD_GET(RISCV_IOMMU_FCTL_GXL, val) )
-        return -EINVAL;
-#endif
-
     return 0;
 }
 
 static void riscv_iommu_custom_uninit(struct riscv_iommu_device *iommu_dev)
 {
-#ifdef CONFIG_SIFIVE_IOMMU22
-    iommu_write32(iommu_dev, RISCV_IOMMU_REG_CUSTOM_VID, 0UL);
-#endif
+    if ( is_sifive_iommu_22(iommu_dev) )
+        iommu_write32(iommu_dev, RISCV_IOMMU_REG_CUSTOM_VID, 0UL);
 }
 
 static int riscv_iommu_enable_cq(struct riscv_iommu_device *iommu_dev)
@@ -1083,7 +1080,7 @@ static void riscv_iommu_disable_pq(struct riscv_iommu_device *iommu_dev)
     iommu_dev->hw.pq_irq = -1;
 }
 
-static int riscv_iommu_request_irq(struct riscv_iommu_device *iommu_dev)
+static int riscv_iommu_init_irq(struct riscv_iommu_device *iommu_dev)
 {
     // int ret;
     // if ((iommu_dev->cq_irq == iommu_dev->fq_irq) && (iommu_dev->cq_irq ==
@@ -1189,7 +1186,7 @@ static int riscv_iommu_device_hw_probe(struct riscv_iommu_device *iommu_dev,
 #endif /* __BIG_ENDIAN */
 
     /* TODO: CHECK MSI message, for the moment use only APLIC interrupt
-     * BOTH is set to wire by default, change after for MSI
+     * BOTH are set to wire by default, change after for MSI
      */
     if ( !(hw->capabilities & RISCV_IOMMU_CAP_IGS_BOTH) &&
          !(hw->capabilities & RISCV_IOMMU_CAP_IGS_WIS) )
@@ -1258,7 +1255,7 @@ static int riscv_iommu_device_hw_probe(struct riscv_iommu_device *iommu_dev,
         return -EINVAL;
     }
 
-    ret = riscv_iommu_request_irq(iommu_dev);
+    ret = riscv_iommu_init_irq(iommu_dev);
     if ( ret < 0 )
     {
         dev_err(iommu_dev->dev, "cannot request irq (%d)\n", ret);
@@ -1335,7 +1332,7 @@ static int riscv_iommu_enable_ddt(struct riscv_iommu_device *iommu_dev)
 
     iommu_dev->extended_dc =
         iommu_dev->hw.capabilities & RISCV_IOMMU_CAP_MSI_FLAT;
-    iommu_dev->ddt_mode = ddt_mode;
+    iommu_dev->level = iommu_dev->ddt_mode - RISCV_IOMMU_DDTP_MODE_1LVL;
 
     /* IOMMU must be either disabled or in pass-through mode. */
     ddtp = iommu_read64(iommu_dev, RISCV_IOMMU_REG_DDTP);
@@ -1350,13 +1347,6 @@ static int riscv_iommu_enable_ddt(struct riscv_iommu_device *iommu_dev)
 
     switch ( iommu_dev->ddt_mode )
     {
-    case RISCV_IOMMU_DDTP_MODE_BARE:
-        /* Disable IOMMU translation, enable pass-through mode. */
-        iommu_dev->ddtp = NULL;
-        ddtp =
-            FIELD_PREP(RISCV_IOMMU_DDTP_MASK_MODE, RISCV_IOMMU_DDTP_MODE_BARE);
-        break;
-
     case RISCV_IOMMU_DDTP_MODE_1LVL:
     case RISCV_IOMMU_DDTP_MODE_2LVL:
     case RISCV_IOMMU_DDTP_MODE_3LVL:
@@ -1368,10 +1358,16 @@ static int riscv_iommu_enable_ddt(struct riscv_iommu_device *iommu_dev)
         }
         clear_page(iommu_dev->ddtp);
         ddtp = iommu_ddt_phys_to_ppn(_virt_to_maddr(iommu_dev->ddtp)) |
-               (uint64_t) ddt_mode;
+               (uint64_t) iommu_dev->ddt_mode;
         break;
 
-    default: return -EINVAL;
+    default:
+        /* RISCV_IOMMU_DDTP_MODE_OFF and RISCV_IOMMU_DDTP_MODE_BARE 
+         * are not supported
+         * TODO: check whether these modes are to be supported
+         */
+        dev_err(iommu_dev->dev, "IOMMU is off or in bare mode\n");
+        return -EINVAL;
     }
 
     ret = riscv_iommu_wait_ddtp_ready(iommu_dev);
@@ -1463,6 +1459,15 @@ static int riscv_iommu_device_probe(struct device *pdev)
     }
     iommu_dev->dev = pdev;
 
+    if ( dt_device_is_compatible(np, "sifive,iommu-22") )
+    {
+       iommu_dev->sifive_iommu_22 = true;
+       /* force ddt mode to 2 levels for sifive iommu-22 */
+       iommu_dev->ddt_mode = RISCV_IOMMU_DDTP_MODE_2LVL;
+    } else {
+        iommu_dev->ddt_mode = ddt_mode;
+    }
+
     /* get IOMMU base address */
     ret = dt_device_get_paddr(np, 0, &ioaddr, &iosize);
     if ( ret )
@@ -1528,20 +1533,13 @@ riscv_iommu_device_probe_err:
 
 static const struct dt_device_match riscv_iommu_of_match[] = {
     DT_MATCH_COMPATIBLE("riscv,iommu"),
-#ifdef CONFIG_SIFIVE_IOMMU22
     DT_MATCH_COMPATIBLE("sifive,iommu-22"),
-#endif
     {/* sentinel */},
 };
 
 static __init int riscv_iommu_init(struct dt_device_node *dev, const void *data)
 {
     int rc;
-
-#ifdef CONFIG_SIFIVE_IOMMU22
-    /* force ddt mode to 2 levels  */
-    ddt_mode = RISCV_IOMMU_DDTP_MODE_2LVL;
-#endif
 
     dt_device_set_used_by(dev, DOMID_XEN);
 
@@ -1555,4 +1553,4 @@ static __init int riscv_iommu_init(struct dt_device_node *dev, const void *data)
 
 DT_DEVICE_START(riscv_iommu_device, "RISC-V IOMMU", DEVICE_IOMMU)
     .dt_match = riscv_iommu_of_match,
-   .init = riscv_iommu_init, DT_DEVICE_END
+    .init = riscv_iommu_init, DT_DEVICE_END

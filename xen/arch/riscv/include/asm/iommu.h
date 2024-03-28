@@ -325,6 +325,9 @@ struct riscv_iommu_device
     /* device directory table mode */
     unsigned int ddt_mode;
 
+    /* device directory table level */
+    unsigned int level;
+
     /* true if device context table entry is exetended (64 bytes) */
     bool extended_dc;
 
@@ -336,6 +339,9 @@ struct riscv_iommu_device
 
     /* notification page (used for iofence notification) */
     void *sync;
+
+    /* true if iommu is SiFive iommu-22 */
+    bool sifive_iommu_22;
 };
 
 struct riscv_iommu_domain
@@ -382,6 +388,10 @@ struct riscv_iommu_master
 
     bool ats_enabled;
 };
+
+static inline bool is_sifive_iommu_22(struct riscv_iommu_device *iommu_dev) {
+    return iommu_dev->sifive_iommu_22;
+}
 
 static inline uint64_t iommu_read64(struct riscv_iommu_device *iommu_dev,
                                     unsigned int offset)

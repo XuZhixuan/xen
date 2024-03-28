@@ -91,9 +91,3 @@ choice
 	config IOMMU_QUARANTINE_SCRATCH_PAGE
 		bool "scratch page"
 endchoice
-
-config SIFIVE_IOMMU22
-    bool "Sifive IOMMU-22 support"
-    depends on RISCV
-    help
-    Sifive IOMMU-22 support
