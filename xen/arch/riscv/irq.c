@@ -109,8 +109,6 @@ void do_IRQ(struct cpu_user_regs *regs, uint32_t irq)
     struct irq_desc *desc = irq_to_desc(irq);
     struct irqaction *action;
 
-    printk("@@@@@@ RECEIVE EXTERNAL IRQ %u\n", irq);
-
     irq_enter();
 
     spin_lock(&desc->lock);
