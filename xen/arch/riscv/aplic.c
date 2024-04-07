@@ -33,15 +33,17 @@ static void aplic_init_hw_interrupts(void)
     int i;
 
     /* Disable all interrupts */
-    for ( i = 0; i <= aplic.nr_irqs; i += 32 )
+    for ( i = 0; i <= aplic_info.nr_irqs; i += 32 )
         aplic.regs->clrie[i] = -1U;
 
-    /* Set interrupt type and default priority for all interrupts */
-    for ( i = 1; i <= aplic.nr_irqs; i++ )
+    /* Set interrupt type */
+    for ( i = 1; i <= aplic_info.nr_irqs; i++ )
     {
         aplic.regs->sourcecfg[i - 1] = 0;
-        aplic.regs->target[i - 1] = APLIC_DEFAULT_PRIORITY;
     }
+
+    /* set imsic delivery for the this hart */
+    imsic_ids_local_delivery(true);
 
     /* Clear APLIC domaincfg */
     aplic.regs->domaincfg = APLIC_DOMAINCFG_IE | APLIC_DOMAINCFG_DM;
@@ -111,7 +113,7 @@ static int __init aplic_init(void)
     }
 
     /* Find out number of interrupt sources */
-    rc = dt_property_read_u32(node, "riscv,num-sources", &aplic.nr_irqs);
+    rc = dt_property_read_u32(node, "riscv,num-sources", &aplic_info.nr_irqs);
     if ( !rc )
     {
         printk(XENLOG_ERR "%s: failed to get number of interrupt sources\n",
@@ -145,7 +147,7 @@ static int __init aplic_init(void)
     if (!rc)
     {
         /* only MSI support */
-        /* @@@@ TODO: implement IDC */
+        /* TODO: implement IDC */
         panic("%s: IDC mode not supported\n", node->full_name);
     }
     return 0;
@@ -154,21 +156,52 @@ aplic_dev_dt_preinit_err1:
     return err;
 }
 
+static unsigned int aplic_get_cpu_from_mask(const cpumask_t *cpumask)
+{
+    unsigned int cpu;
+    cpumask_t possible_mask;
+
+    cpumask_and(&possible_mask, cpumask, &cpu_possible_map);
+    cpu = cpumask_any(&possible_mask);
+
+    return cpu;
+}
+
 static void aplic_irq_enable(struct irq_desc *desc)
 {
-    BUG_ON("unimplemented");
+    unsigned long flags;
+
+    ASSERT(spin_is_locked(&desc->lock));
+
+    spin_lock_irqsave(&aplic.lock, flags);
+    clear_bit(_IRQ_DISABLED, &desc->status);
+    /* enable interrupt in IMSIC */
+    imsic_irq_enable(desc->irq);
+    /* enable interrupt in APLIC */
+    aplic.regs->setienum = desc->irq;
+    spin_unlock_irqrestore(&aplic.lock, flags);
 }
 
 static void aplic_irq_disable(struct irq_desc *desc)
 {
-    BUG_ON("unimplemented");
+    unsigned long flags;
+
+    ASSERT(spin_is_locked(&desc->lock));
+
+    spin_lock_irqsave(&aplic.lock, flags);
+    set_bit(_IRQ_DISABLED, &desc->status);
+    /* disable interrupt in APLIC */
+    aplic.regs->clrienum = desc->irq;
+    /* disable interrupt in IMSIC */
+    imsic_irq_disable(desc->irq);
+    spin_unlock_irqrestore(&aplic.lock, flags);
 }
 
 static int __init aplic_secondary_cpu_init(void)
 {
-    BUG_ON("unimplemented");
-
-    return -EOPNOTSUPP;
+    /* set imsic delivery for the secondary harts */
+    imsic_ids_local_delivery(true);
+    return 0;
 }
 
 static void aplic_save_state(struct vcpu *v)
@@ -182,16 +215,6 @@ static void aplic_restore_state(const struct vcpu *v)
 }
 
 static void aplic_dump_state(const struct vcpu *v)
-{
-    BUG_ON("unimplemented");
-}
-
-static void aplic_eoi_irq(struct irq_desc *irqd)
-{
-    BUG_ON("unimplemented");
-}
-
-static void aplic_dir_irq(struct irq_desc *irqd)
 {
     BUG_ON("unimplemented");
 }
@@ -215,15 +238,34 @@ static void aplic_set_pending_state(struct irq_desc *irqd, bool pending)
 
 static void aplic_set_irq_type(struct irq_desc *desc, unsigned int type)
 {
-    BUG_ON("unimplemented");
+    unsigned int irq = desc->irq - 1;
+    
+    spin_lock(&aplic.lock);
+    switch(type) {
+        case IRQ_TYPE_EDGE_RISING:
+            aplic.regs->sourcecfg[irq] = APLIC_SOURCECFG_SM_EDGE_RISE;
+            break;
+        case IRQ_TYPE_EDGE_FALLING:
+            aplic.regs->sourcecfg[irq] = APLIC_SOURCECFG_SM_EDGE_FALL;
+            break;
+        case IRQ_TYPE_LEVEL_HIGH:
+            aplic.regs->sourcecfg[irq] = APLIC_SOURCECFG_SM_LEVEL_HIGH;
+            break;
+        case IRQ_TYPE_LEVEL_LOW:
+            aplic.regs->sourcecfg[irq] = APLIC_SOURCECFG_SM_LEVEL_LOW;
+            break;
+        default:
+            aplic.regs->sourcecfg[irq] = APLIC_SOURCECFG_SM_INACTIVE;
+            break;
+    }
+    spin_unlock(&aplic.lock);
 }
 
 static void aplic_set_irq_priority(struct irq_desc *desc,
                                    unsigned int priority)
 {
-    BUG_ON("unimplemented");
+    /* No priority, do nothing */
 }
-
 
 static unsigned int aplic_irq_startup(struct irq_desc *desc)
 {
@@ -239,32 +281,50 @@ static void aplic_irq_shutdown(struct irq_desc *desc)
 
 static void aplic_irq_ack(struct irq_desc *desc)
 {
-    BUG_ON("unimplemented");
+    /* nothing to do */
 }
 
 static void aplic_host_irq_end(struct irq_desc *desc)
 {
-    /* Lower the priority */
-    aplic_eoi_irq(desc);
-    /* Deactivate */
-    aplic_dir_irq(desc);
+    /* do nothing */
 }
 
-static void aplic_guest_irq_end(struct irq_desc *desc)
-{
-    /* Lower the priority of the IRQ */
-    aplic_eoi_irq(desc);
-    /* Deactivation happens in maintenance interrupt / via GICV */
-}
+// static void aplic_guest_irq_end(struct irq_desc *desc)
+// {
+//     /* Lower the priority of the IRQ */
+//     aplic_eoi_irq(desc);
+//     /* Deactivation happens in maintenance interrupt / via GICV */
+// }
 
-static void aplic_irq_set_affinity(struct irq_desc *desc, const cpumask_t *cpu_mask)
+static void aplic_set_irq_affinity(struct irq_desc *desc, const cpumask_t *mask)
 {
-    BUG_ON("unimplemented");
+    unsigned int cpu;
+    uint64_t group_index, base_ppn;
+    uint32_t hhxw, lhxw ,hhxs, value;
+    const struct imsic_config *imsic = aplic.imsic_cfg;
+
+    ASSERT(!cpumask_empty(mask));
+
+    spin_lock(&aplic.lock);
+    
+    cpu = cpu_physical_id(aplic_get_cpu_from_mask(mask));
+    hhxw = imsic->group_index_bits;
+    lhxw = imsic->hart_index_bits;
+    hhxs = imsic->group_index_shift - IMSIC_MMIO_PAGE_SHIFT * 2;
+    base_ppn = imsic->msi[cpu].base_addr >> IMSIC_MMIO_PAGE_SHIFT;
+
+    /* update hart and EEID in the target register */
+    group_index = (base_ppn >> (hhxs + 12)) & (BIT(hhxw, UL) - 1);
+    value = desc->irq;
+    value |= cpu << APLIC_TARGET_HART_IDX_SHIFT;
+    value |= group_index << (lhxw + APLIC_TARGET_HART_IDX_SHIFT) ;
+    aplic.regs->target[desc->irq - 1] = value;
+    spin_unlock(&aplic.lock);
 }
 
 static void aplic_disable_interface(void)
 {
-    BUG_ON("unimplemented");
+    imsic_ids_local_delivery(false);
 }
 
 static bool aplic_read_pending_state(struct irq_desc *irqd)
@@ -387,6 +447,21 @@ static void * aplic_get_private(void)
     return aplic_info.private;
 }
 
+void aplic_handle_interrupt(unsigned long cause, struct cpu_user_regs *regs)
+{
+    /* disable to avoid more external interrupts */
+    csr_clear(CSR_SIE, 1UL << IRQ_S_EXT);
+
+    /* clear the pending bit */
+    csr_clear(CSR_SIP, 1UL << IRQ_S_EXT);
+    
+    /* dispatch the interrupt */
+    do_IRQ(regs, csr_swap(CSR_STOPEI, 0) >> TOPI_IID_SHIFT);
+
+    /* enable external interrupts */
+    csr_set(CSR_SIE, 1UL << IRQ_S_EXT);
+}
+
 static hw_irq_controller aplic_host_irq_type = {
     .typename     = "aplic",
     .startup      = aplic_irq_startup,
@@ -395,19 +470,19 @@ static hw_irq_controller aplic_host_irq_type = {
     .disable      = aplic_irq_disable,
     .ack          = aplic_irq_ack,
     .end          = aplic_host_irq_end,
-    .set_affinity = aplic_irq_set_affinity,
+    .set_affinity = aplic_set_irq_affinity,
 };
 
-static hw_irq_controller aplic_guest_irq_type = {
-    .typename     = "aplic",
-    .startup      = aplic_irq_startup,
-    .shutdown     = aplic_irq_shutdown,
-    .enable       = aplic_irq_enable,
-    .disable      = aplic_irq_disable,
-    .ack          = aplic_irq_ack,
-    .end          = aplic_guest_irq_end,
-    .set_affinity = aplic_irq_set_affinity,
-};
+// static hw_irq_controller aplic_guest_irq_type = {
+//     .typename     = "aplic",
+//     .startup      = aplic_irq_startup,
+//     .shutdown     = aplic_irq_shutdown,
+//     .enable       = aplic_irq_enable,
+//     .disable      = aplic_irq_disable,
+//     .ack          = aplic_irq_ack,
+//     .end          = aplic_guest_irq_end,
+//     .set_affinity = aplic_set_irq_affinity,
+// };
 
 const static struct gic_hw_operations aplic_ops = {
     .info                = &aplic_info,
@@ -418,10 +493,8 @@ const static struct gic_hw_operations aplic_ops = {
     .save_state          = aplic_save_state,
     .restore_state       = aplic_restore_state,
     .dump_state          = aplic_dump_state,
-    .gic_host_irq_type   = &aplic_host_irq_type,
-    .gic_guest_irq_type  = &aplic_guest_irq_type,
-    .eoi_irq             = aplic_eoi_irq,
-    .deactivate_irq      = aplic_dir_irq,
+    .host_irq_type       = &aplic_host_irq_type,
+    // .guest_irq_type      = &aplic_guest_irq_type,
     .read_irq            = aplic_read_irq,
     .set_active_state    = aplic_set_active_state,
     .set_pending_state   = aplic_set_pending_state,
@@ -433,12 +506,16 @@ const static struct gic_hw_operations aplic_ops = {
     .map_hwdom_extra_mappings = aplic_map_hwdom_extra_mappings,
     .iomem_deny_access   = imsic_iomem_deny_access,
     .get_private         = aplic_get_private,
+    .handle_interrupt    = aplic_handle_interrupt,
 };
 
 static int __init aplic_preinit(struct dt_device_node *node,
                                 const void *dat)
 {
     static bool already_set = false;
+
+    /* Enable supervisor external interrupt */
+    csr_set(CSR_SIE, 1UL << IRQ_S_EXT);
 
     /* support only one supervisor aplic */
     if ( already_set )
@@ -453,6 +530,7 @@ static int __init aplic_preinit(struct dt_device_node *node,
     
     aplic_info.node = node;
     aplic.imsic_cfg = imsic_get_config();
+    spin_lock_init(&aplic.lock);
     gic_ops_register(&aplic_ops);
     dt_irq_xlate = aplic_irq_xlate;
 

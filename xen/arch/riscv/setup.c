@@ -168,6 +168,8 @@ void __init noreturn start_xen(unsigned long bootcpu_id,
 
     vm_init();
 
+    init_IRQ();
+
     dt_unflatten_host_device_tree();
 
     riscv_fill_hwcap();

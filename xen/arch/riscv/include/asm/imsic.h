@@ -75,6 +75,9 @@ struct imsic_config {
 	uint32_t nr_mmios;
     struct imsic_mmios *mmios;
 
+	/* lock */
+    spinlock_t lock;
+
     /* MSI */
 	struct imsic_msi msi[NR_CPUS];
 };
@@ -89,6 +92,11 @@ int imsic_make_dt_node(struct domain *d, void *fdt, const struct dt_device_node 
 int imsic_get_guest_interrupt_file(const struct domain *d);
 int imsic_iomem_deny_access(struct domain *d);
 
+void imsic_irq_enable(uint32_t hwirq);
+void imsic_irq_disable(uint32_t hwirq);
+
 const struct imsic_config *imsic_get_config(void);
+
+void imsic_ids_local_delivery(bool enable);
 
 #endif /* __ASM_RISCV_IMSIC_H__ */

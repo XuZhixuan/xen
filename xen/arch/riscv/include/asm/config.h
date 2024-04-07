@@ -148,6 +148,8 @@
 
 #define RAM_BASE  0x4000000000
 
+#define CONFIG_IRQ_HAS_MULTIPLE_ACTION 1
+
 #endif /* __RISCV_CONFIG_H__ */
 /*
  * Local variables:

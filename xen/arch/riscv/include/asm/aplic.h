@@ -178,16 +178,16 @@ struct aplic_regs {
 };
 
 struct aplic_priv {
-    /* number of irqs */
-    uint32_t   nr_irqs;
-
     /* base physical address and size */
     paddr_t    paddr_start;
     paddr_t    paddr_end;
     uint64_t   size;
 
     /* registers */
-    struct aplic_regs   *regs;
+    volatile struct aplic_regs *regs;
+
+    /* lock */
+    spinlock_t lock;
 
     /* imsic configuration */
     const struct imsic_config *imsic_cfg;

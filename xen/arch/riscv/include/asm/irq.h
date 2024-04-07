@@ -20,11 +20,14 @@
 #define IRQ_TYPE_SENSE_MASK     DT_IRQ_TYPE_SENSE_MASK
 #define IRQ_TYPE_INVALID        DT_IRQ_TYPE_INVALID
 
+#define IRQ_NO_PRIORITY 0
+
 struct arch_pirq
 {
 };
 
 struct arch_irq_desc {
+    unsigned int type;
 };
 
 void arch_move_irqs(struct vcpu *v);
@@ -37,8 +40,14 @@ extern const unsigned int nr_irqs;
 
 #define arch_evtchn_bind_pirq(d, pirq) ((void)((d) + (pirq)))
 
+void irq_set_affinity(struct irq_desc *desc, const cpumask_t *cpu_mask);
+
+int platform_get_nr_irqs(const struct dt_device_node *device);
 int platform_get_irq(const struct dt_device_node *device, int index);
 int platform_get_irq_byname(const struct dt_device_node *np, const char *name);
+
+void init_IRQ(void);
+void do_IRQ(struct cpu_user_regs *regs, uint32_t irq);
 
 #endif /* _ASM_HW_IRQ_H */
 /*

@@ -684,6 +684,9 @@ void do_trap(struct cpu_user_regs *cpu_regs)
         case IRQ_S_TIMER:
             timer_interrupt(cause, cpu_regs);
             break;
+        case IRQ_S_EXT:
+            gic_handle_external_interrupts(cause, cpu_regs);
+            break;
         default:
             dump_csrs(cause);
             break;

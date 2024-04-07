@@ -31,6 +31,8 @@ struct gic_info {
     int interrupt_cell_size;
     /* private data pointer of the interrupt controller */
     void *private;
+    /* GIC number of interrupt */
+    unsigned int nr_irqs;
 };
 
 struct gic_hw_operations {
@@ -49,13 +51,9 @@ struct gic_hw_operations {
     /* unregister domain */
     int (*unregister_domain)(const struct domain *d);
     /* hw_irq_controller to enable/disable/eoi host irq */
-    hw_irq_controller *gic_host_irq_type;
+    hw_irq_controller *host_irq_type;
     /* hw_irq_controller to enable/disable/eoi guest irq */
-    hw_irq_controller *gic_guest_irq_type;
-    /* End of Interrupt */
-    void (*eoi_irq)(struct irq_desc *irqd);
-    /* Deactivate/reduce priority of irq */
-    void (*deactivate_irq)(struct irq_desc *irqd);
+    // hw_irq_controller *guest_irq_type;
     /* Read IRQ id and Ack */
     unsigned int (*read_irq)(void);
     /* Force the active state of an IRQ by accessing the distributor */
@@ -81,6 +79,8 @@ struct gic_hw_operations {
     int (*iomem_deny_access)(struct domain *d);
     /* get private section */
     void * (*get_private)(void);
+    /* handle external interrupt */
+    void (*handle_interrupt)(unsigned long cause, struct cpu_user_regs *regs);
 };
 
 struct vgic {
@@ -109,5 +109,11 @@ void* gic_get_private(void);
 int gic_iomem_deny_access(struct domain *d);
 
 void gic_init_secondary_cpu(void);
+
+void gic_route_irq_to_xen(struct irq_desc *desc, unsigned int priority);
+
+void gic_disable_cpu(void);
+
+void gic_handle_external_interrupts(unsigned long cause, struct cpu_user_regs *regs);
 
 #endif /* __ASM_RISCV_GIC_H__ */

@@ -19,68 +19,19 @@
 
 static const struct gic_hw_operations *gic_ops = NULL;
 
-void* gic_get_private(void)
+/* desc->irq needs to be disabled before calling this function */
+static void gic_set_irq_type(struct irq_desc *desc, unsigned int type)
 {
-    if ( gic_ops->get_private )
-        return gic_ops->get_private();
+    ASSERT(test_bit(_IRQ_DISABLED, &desc->status));
+    ASSERT(spin_is_locked(&desc->lock));
+    ASSERT(type != IRQ_TYPE_INVALID);
 
-    return NULL;
+    gic_ops->set_irq_type(desc, type);
 }
 
-/* Set up the per-CPU parts of the GIC for a secondary CPU */
-void gic_init_secondary_cpu(void)
+static void gic_set_irq_priority(struct irq_desc *desc, unsigned int priority)
 {
-    if ( gic_ops->secondary_init )
-        gic_ops->secondary_init();
-}
-
-int gic_make_hwdom_dt_node(struct domain *d,
-                           const struct dt_device_node *gic,
-                           void *fdt)
-{
-    ASSERT(gic == dt_interrupt_controller);
-
-    if ( gic_ops && gic_ops->make_dom_dt_node )
-        return gic_ops->make_dom_dt_node(d, gic, fdt);
-
-    return 0;
-}
-
-int gic_make_domu_dt_node(struct domain *d, void *fdt)
-{
-    if ( gic_ops && gic_ops->make_dom_dt_node )
-        return gic_ops->make_dom_dt_node(d, gic_ops->info->node, fdt);
-
-    return 0;
-}
-
-int gic_iomem_deny_access(struct domain *d)
-{
-    if ( gic_ops && gic_ops->iomem_deny_access )
-        return gic_ops->iomem_deny_access(d);
-
-    return 0;
-}
-
-int gic_register_domain(const struct domain *d)
-{
-    if ( gic_ops && gic_ops->register_domain )
-        return gic_ops->register_domain(d);
-
-    return 0;
-}
-
-int gic_unregister_domain(const struct domain *d)
-{
-    if ( gic_ops && gic_ops->unregister_domain )
-        return gic_ops->unregister_domain(d);
-
-    return 0;
-}
-
-void gic_ops_register(const struct gic_hw_operations *ops)
-{
-    gic_ops = ops;
+    gic_ops->set_irq_priority(desc, priority);
 }
 
 static void __init gic_dt_preinit(void)
@@ -111,6 +62,76 @@ static void __init gic_dt_preinit(void)
     /* Set the GIC as the primary interrupt controller */
     dt_interrupt_controller = node;
     dt_device_set_used_by(node, DOMID_XEN);
+}
+
+/* Set up the per-CPU parts of the GIC for a secondary CPU */
+void gic_init_secondary_cpu(void)
+{
+    if ( gic_ops->secondary_init )
+        gic_ops->secondary_init();
+}
+
+/* Shut down the per-CPU GIC interface */
+void gic_disable_cpu(void)
+{
+    if ( gic_ops->disable_interface )
+        gic_ops->disable_interface();
+}
+
+int gic_make_hwdom_dt_node(struct domain *d,
+                           const struct dt_device_node *gic,
+                           void *fdt)
+{
+    ASSERT(gic == dt_interrupt_controller);
+
+    if ( gic_ops && gic_ops->make_dom_dt_node )
+        return gic_ops->make_dom_dt_node(d, gic, fdt);
+
+    return 0;
+}
+
+int gic_make_domu_dt_node(struct domain *d, void *fdt)
+{
+    if ( gic_ops && gic_ops->make_dom_dt_node )
+        return gic_ops->make_dom_dt_node(d, gic_ops->info->node, fdt);
+
+    return 0;
+}
+
+int gic_iomem_deny_access(struct domain *d)
+{
+    if ( gic_ops && gic_ops->iomem_deny_access )
+        return gic_ops->iomem_deny_access(d);
+
+    return 0;
+}
+
+void gic_handle_external_interrupts(unsigned long cause, 
+                                    struct cpu_user_regs *regs)
+{
+    if ( gic_ops && gic_ops->handle_interrupt )
+        gic_ops->handle_interrupt(cause, regs);
+}
+
+int gic_register_domain(const struct domain *d)
+{
+    if ( gic_ops && gic_ops->register_domain )
+        return gic_ops->register_domain(d);
+
+    return 0;
+}
+
+int gic_unregister_domain(const struct domain *d)
+{
+    if ( gic_ops && gic_ops->unregister_domain )
+        return gic_ops->unregister_domain(d);
+
+    return 0;
+}
+
+void gic_ops_register(const struct gic_hw_operations *ops)
+{
+    gic_ops = ops;
 }
 
 void __init gic_init(void)
@@ -161,4 +182,16 @@ void gic_free_vgic(struct vgic *v)
     default:
         panic("Unsupported free of gic\n"); 
     }
+}
+
+void gic_route_irq_to_xen(struct irq_desc *desc, unsigned int priority) {
+    // TODO: check if it is useful ASSERT(test_bit(_IRQ_DISABLED, &desc->status));
+    ASSERT(spin_is_locked(&desc->lock));
+    /* Can't route interrupts that don't exist */
+    ASSERT(desc->irq < gic_ops->info->nr_irqs);
+
+    desc->handler = gic_ops->host_irq_type;
+
+    gic_set_irq_type(desc, desc->arch.type);
+    gic_set_irq_priority(desc, priority);  
 }

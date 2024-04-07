@@ -60,6 +60,33 @@ struct imsic_config imsic_cfg;
 static spinlock_t pool_lock;
 static int domain_id_pool[IMSIC_GEILEN] = {[0 ... IMSIC_GEILEN-1] = -1};
 
+static void imsic_local_eix_update(unsigned long base_id,
+                                   unsigned long num_id, bool pend,
+                                   bool val)
+{
+  unsigned long i, isel, ireg;
+  unsigned long id = base_id, last_id = base_id + num_id;
+
+  while ( id < last_id ) {
+    isel = id / __riscv_xlen;
+    isel *= __riscv_xlen / IMSIC_EIPx_BITS;
+    isel += (pend) ? IMSIC_EIP0 : IMSIC_EIE0;
+
+    ireg = 0;
+    for ( i = id & (__riscv_xlen - 1); (id < last_id) && (i < __riscv_xlen); i++ ) {
+        ireg |= 1 << i;
+        id++;
+    }
+
+    if ( val )
+        imsic_csr_set(isel, ireg);
+    else
+        imsic_csr_clear(isel, ireg);
+    imsic_csr_read(0x70);
+    imsic_csr_read(0x72);
+  }
+}
+
 static int __init imsic_get_parent_hartid(struct dt_device_node *node,
                       uint32_t index, unsigned long *hartid)
 {
@@ -216,6 +243,39 @@ static int imsic_set_interrupt_extended_prop(struct domain *d, void *fdt)
     }
 
     return fdt_property(fdt, "interrupts-extended", (void*)irq_ext, len);  
+}
+
+void imsic_ids_local_delivery(bool enable)
+{
+    if (enable) {
+        imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_ENABLE_EITHRESHOLD);
+        imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_ENABLE_EIDELIVERY);
+    } else {
+        imsic_csr_write(IMSIC_EIDELIVERY, IMSIC_DISABLE_EIDELIVERY);
+        imsic_csr_write(IMSIC_EITHRESHOLD, IMSIC_DISABLE_EITHRESHOLD);
+    }
+}
+
+void imsic_set_affinity(unsigned int hartid, unsigned int new_hartid) {
+
+}
+
+void imsic_irq_enable(uint32_t hwirq)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&imsic_cfg.lock, flags);
+    imsic_local_eix_update(hwirq, 1, false, true);
+    spin_unlock_irqrestore(&imsic_cfg.lock, flags);
+}
+
+void imsic_irq_disable(uint32_t hwirq)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&imsic_cfg.lock, flags);
+    imsic_local_eix_update(hwirq, 1, false, false);
+    spin_unlock_irqrestore(&imsic_cfg.lock, flags);
 }
 
 int imsic_make_dt_node(struct domain *d, void *fdt, const struct dt_device_node *imsic_node)
@@ -405,6 +465,8 @@ int imsic_parse_node(struct dt_device_node *node,
         return -EINVAL;
     }
 
+    spin_lock_init(&imsic_cfg.lock);
+
     imsic_cfg.base_addr = base_addr;
     imsic_cfg.base_addr &= ~(BIT(imsic_cfg.guest_index_bits +
                    imsic_cfg.hart_index_bits +
@@ -527,9 +589,9 @@ int __init imsic_init(struct dt_device_node *node)
     if ( !nr_handlers )
     {
         printk(XENLOG_ERR "%s: No CPU handlers found\n", node->name);
-		rc = -ENODEV;
+        rc = -ENODEV;
         goto imsic_init_err;
-	}
+    }
 
     return 0;
 

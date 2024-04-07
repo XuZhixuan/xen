@@ -14,6 +14,7 @@
 #include <asm/plic.h>
 #include <asm/sbi.h>
 #include <asm/traps.h>
+#include <asm/gic.h>
 
 cpumask_t cpu_online_map;
 cpumask_t cpu_present_map;
@@ -78,7 +79,17 @@ int __cpu_up(unsigned int cpu)
 /* Shut down the current CPU */
 void __cpu_disable(void)
 {
-    assert_failed("need to be implemented\n");
+    unsigned int cpu = get_processor_id();
+
+    gic_disable_cpu();
+
+    /* It's now safe to remove this processor from the online map */
+    cpumask_clear_cpu(cpu, &cpu_online_map);
+
+    smp_mb();
+
+    /* Return to caller; eventually the IPI mechanism will unwind and the 
+     * scheduler will drop to the idle loop, which will call stop_cpu(). */
 }
 
 void __cpu_die(unsigned int cpu)
@@ -268,7 +279,7 @@ void __init smp_callin(unsigned int cpuid)
 
     trap_init();
 
-    /* gic_init_secondary_cpu(); */
+    gic_init_secondary_cpu();
 
     set_current(idle_vcpu[hcpu]);
 

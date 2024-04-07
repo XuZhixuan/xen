@@ -3,15 +3,38 @@
 
 #include <xen/bug.h>
 #include <xen/sched.h>
+#include <xen/cpu.h>
+
+#include <asm/gic.h>
 
 const unsigned int nr_irqs = NR_IRQS;
 
 hw_irq_controller no_irq_type = {
 };
 
-int arch_init_one_irq_desc(struct irq_desc *desc)
+static irq_desc_t irq_desc[NR_IRQS];
+
+static int __setup_irq(struct irq_desc *desc, unsigned int irqflags,
+                       struct irqaction *new)
 {
-    assert_failed("need to be implemented");
+    bool shared = irqflags & IRQF_SHARED;
+
+    ASSERT(new != NULL);
+
+    /* Sanity checks:
+     *  - if the IRQ is marked as shared
+     *  - dev_id is not NULL when IRQF_SHARED is set
+     */
+    if ( desc->action != NULL && (!test_bit(_IRQF_SHARED, &desc->status) || !shared) )
+        return -EINVAL;
+    if ( shared && new->dev_id == NULL )
+        return -EINVAL;
+
+    if ( shared )
+        set_bit(_IRQF_SHARED, &desc->status);
+
+    desc->action = new;
+
     return 0;
 }
 
@@ -50,24 +73,247 @@ void arch_move_irqs(struct vcpu *v)
     printk("%s: need to be implemented", __func__);
 }
 
+int arch_init_one_irq_desc(struct irq_desc *desc)
+{
+    desc->arch.type = IRQ_TYPE_INVALID;
+    return 0;
+}
+
+static int __init init_irq_data(void)
+{
+    int irq;
+
+    for ( irq = 0; irq < NR_IRQS; irq++ )
+    {
+        struct irq_desc *desc = irq_to_desc(irq);
+        int rc = init_one_irq_desc(desc);
+
+        if ( rc )
+            return rc;
+
+        desc->irq = irq;
+        desc->action  = NULL;
+    }
+
+    return 0;
+}
+
+void __init init_IRQ(void)
+{
+    BUG_ON(init_irq_data() < 0);
+}
+
+/* Dispatch an interrupt */
+void do_IRQ(struct cpu_user_regs *regs, uint32_t irq)
+{
+    struct irq_desc *desc = irq_to_desc(irq);
+    struct irqaction *action;
+
+    printk("@@@@@@ RECEIVE EXTERNAL IRQ %u\n", irq);
+
+    irq_enter();
+
+    spin_lock(&desc->lock);
+    desc->handler->ack(desc);
+
+    if ( test_bit(_IRQ_DISABLED, &desc->status) )
+        goto out;
+
+    set_bit(_IRQ_INPROGRESS, &desc->status);
+
+    action = desc->action;
+
+    spin_unlock_irq(&desc->lock);
+
+    do
+    {
+        action->handler(irq, action->dev_id, regs);
+        action = action->next;
+    } while ( action );
+
+    spin_lock_irq(&desc->lock);
+
+    clear_bit(_IRQ_INPROGRESS, &desc->status);
+
+out:
+    desc->handler->end(desc);
+    spin_unlock(&desc->lock);
+    irq_exit();
+}
+
+void irq_set_affinity(struct irq_desc *desc, const cpumask_t *cpu_mask)
+{
+    if ( desc != NULL )
+        desc->handler->set_affinity(desc, cpu_mask);
+}
+
 int setup_irq(unsigned int irq, unsigned int irqflags, struct irqaction *new)
 {
-    assert_failed(__func__);
+      int rc;
+    unsigned long flags;
+    struct irq_desc *desc;
+    bool disabled;
 
-    return -ENOSYS;
+    desc = irq_to_desc(irq);
+
+    spin_lock_irqsave(&desc->lock, flags);
+
+    disabled = (desc->action == NULL);
+
+    rc = __setup_irq(desc, irqflags, new);
+    if ( rc )
+        goto err;
+
+    /* First time the IRQ is setup */
+    if ( disabled )
+    {
+        /* disable irq by default */
+        set_bit(_IRQ_DISABLED, &desc->status);
+
+        /* route interrupt to xen */
+        gic_route_irq_to_xen(desc, IRQ_NO_PRIORITY);
+
+        /* TODO: Handle case where IRQ is setup on different CPU than
+         * the targeted CPU and the priority.
+         */
+        irq_set_affinity(desc, cpumask_of(smp_processor_id()));
+        desc->handler->startup(desc);
+        /* enable irq */
+        clear_bit(_IRQ_DISABLED, &desc->status);
+    }
+
+err:
+    spin_unlock_irqrestore(&desc->lock, flags);
+
+    return rc;
+}
+
+int request_irq(unsigned int irq, unsigned int irqflags,
+                void (*handler)(int, void *, struct cpu_user_regs *),
+                const char *devname, void *dev_id)
+{
+    struct irqaction *action;
+    int retval;
+
+    /*
+     * Sanity-check: shared interrupts must pass in a real dev-ID,
+     * otherwise we'll have trouble later trying to figure out
+     * which interrupt is which (messes up the interrupt freeing
+     * logic etc).
+     */
+    if ( irq >= nr_irqs )
+        return -EINVAL;
+    if ( !handler )
+        return -EINVAL;
+
+    action = xmalloc(struct irqaction);
+    if ( !action )
+        return -ENOMEM;
+
+    action->handler = handler;
+    action->name = devname;
+    action->dev_id = dev_id;
+    action->free_on_release = 1;
+    action->next = NULL;
+
+    retval = setup_irq(irq, irqflags, action);
+    if ( retval )
+        xfree(action);
+
+    return retval;
+}
+
+void release_irq(unsigned int irq, const void *dev_id)
+{
+    struct irq_desc *desc;
+    unsigned long flags;
+    struct irqaction *action, **action_ptr;
+
+    desc = irq_to_desc(irq);
+
+    spin_lock_irqsave(&desc->lock,flags);
+
+    action_ptr = &desc->action;
+    for ( ;; )
+    {
+        action = *action_ptr;
+        if ( !action )
+        {
+            printk(XENLOG_WARNING "Trying to free already-free IRQ %u\n", irq);
+            spin_unlock_irqrestore(&desc->lock, flags);
+            return;
+        }
+
+        if ( action->dev_id == dev_id )
+            break;
+
+        action_ptr = &action->next;
+    }
+
+    /* Found it - remove it from the action list */
+    *action_ptr = action->next;
+
+    /* If this was the last action, shut down the IRQ */
+    if ( !desc->action )
+    {
+        desc->handler->shutdown(desc);
+        clear_bit(_IRQ_GUEST, &desc->status);
+    }
+
+    spin_unlock_irqrestore(&desc->lock,flags);
+
+    /* Wait to make sure it's not being used on another CPU */
+    do { smp_mb(); } while ( test_bit(_IRQ_INPROGRESS, &desc->status) );
+
+    if ( action->free_on_release )
+        xfree(action);
+}
+
+static bool irq_validate_new_type(unsigned int curr, unsigned int new)
+{
+    return (curr == IRQ_TYPE_INVALID || curr == new );
+}
+
+static int irq_set_type(unsigned int irq, unsigned int type)
+{
+    unsigned long flags;
+    int ret = -EINVAL;
+    struct irq_desc *desc = irq_to_desc(irq);
+
+    spin_lock_irqsave(&desc->lock, flags);
+    if ( !irq_validate_new_type(desc->arch.type, type) )
+        goto err;
+    desc->arch.type = type;
+    ret = 0;
+
+err:
+    spin_unlock_irqrestore(&desc->lock, flags);
+    return ret;
+}
+
+int platform_get_nr_irqs(const struct dt_device_node *device)
+{
+    struct dt_raw_irq raw;
+    int count = 0;
+    unsigned int index = 0;
+
+    while( dt_device_get_raw_irq(device, index++, &raw) == 0 ) {
+        count++;
+    }
+    return count;
 }
 
 int platform_get_irq(const struct dt_device_node *device, int index)
 {
     struct dt_irq dt_irq;
-    unsigned int irq;
-
+    
     if ( dt_device_get_irq(device, index, &dt_irq) )
         return -1;
 
-    irq = dt_irq.irq;
+    if ( irq_set_type(dt_irq.irq, dt_irq.type) )
+        return -1;
 
-    return irq;
+    return dt_irq.irq;
 }
 
 int platform_get_irq_byname(const struct dt_device_node *np, const char *name)
