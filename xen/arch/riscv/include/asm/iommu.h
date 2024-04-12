@@ -123,8 +123,8 @@
 #define RISCV_IOMMU_CQ_BUSY BIT(17, UL)
 
 /* Fault queue base register */
-#define RIISCV_IOMMU_FQ_MASK_LOG2SZ 0x000000000000001FULL
-#define RIISCV_IOMMU_FQ_MASK_PPN 0x003FFFFFFFFFFC00ULL
+#define RISCV_IOMMU_FQ_MASK_LOG2SZ 0x000000000000001FULL
+#define RISCV_IOMMU_FQ_MASK_PPN 0x003FFFFFFFFFFC00ULL
 
 /* Fault queue control and status register */
 #define RISCV_IOMMU_FQ_EN BIT(0, UL)
@@ -232,6 +232,32 @@
 #define RISCV_IOMMU_IODIR_MASK_PID 0x00000000FFFFF000ULL
 #define RISCV_IOMMU_IODIR_MASK_DID 0xFFFFFF0000000000ULL
 
+/* Interrupt Sources */
+#define RISCV_IOMMU_INT_CQ     0
+#define RISCV_IOMMU_INT_FQ     1
+#define RISCV_IOMMU_INT_PM     2
+#define RISCV_IOMMU_INT_PQ     3
+#define RISCV_IOMMU_INT_COUNT  4
+
+#define RISCV_IOMMU_IPSR_CQIP   BIT(RISCV_IOMMU_INT_CQ, UL)
+#define RISCV_IOMMU_IPSR_FQIP   BIT(RISCV_IOMMU_INT_FQ, UL)
+#define RISCV_IOMMU_IPSR_PMIP   BIT(RISCV_IOMMU_INT_PM, UL)
+#define RISCV_IOMMU_IPSR_PQIP   BIT(RISCV_IOMMU_INT_PQ, UL)
+
+/* Interrupt vector mapping */
+#define RIISC_IOMMU_IVEC_CQIV   (0x0F << 0)
+#define RIISC_IOMMU_IVEC_FQIV   (0x0F << 4)
+#define RIISC_IOMMU_IVEC_PMIV   (0x0F << 8)
+#define RIISC_IOMMU_IVEC_PQIV   (0x0F << 12)
+
+/* riscv_iommu_event.reason */
+#define RISCV_IOMMU_EVENT_MASK_CAUSE    0x0000000000000FFFULL
+#define RISCV_IOMMU_EVENT_MASK_PID      0x00000000FFFFF000ULL
+#define RISCV_IOMMU_EVENT_MASK_DID      0xFFFFFF0000000000ULL
+#define RISCV_IOMMU_EVENT_PV            0x0000000100000000ULL
+#define RISCV_IOMMU_EVENT_PRIV          0x0000000200000000ULL
+#define RISCV_IOMMU_EVENT_MASK_TTYPE    0x000000FC00000000ULL
+
 struct riscv_iommu_dc
 {
     uint64_t tc;
@@ -267,6 +293,29 @@ struct riscv_iommu_page_request
     uint64_t payload;
 };
 
+/* command queue */
+struct riscv_iommu_cmd_queue {
+    spinlock_t lock;
+    struct riscv_iommu_command *cmd;
+    uint32_t mask;
+    uint32_t tail;
+    uint32_t irq;
+};
+
+/* fault queue */
+struct riscv_iommu_fault_queue {
+    struct riscv_iommu_event *event;
+    uint32_t mask;
+    uint32_t irq;
+};
+
+/* page request queue */
+struct riscv_iommu_page_req_queue {
+    struct riscv_iommu_page_request *req;
+    uint32_t mask;
+    uint32_t irq;
+};
+
 struct riscv_iommu_hw
 {
     /* Memory-mapped registers */
@@ -278,25 +327,13 @@ struct riscv_iommu_hw
     /* Features control register */
     uint32_t fctl;
 
-    /* instruction queue */
-    spinlock_t cq_lock;
-    struct riscv_iommu_command *cq;
-    unsigned int cq_mask;
-    int cq_irq;
+    /* nuber of interrupt */
+    uint32_t nr_irqs;
 
-    /* fault queue */
-    struct riscv_iommu_event *fq;
-    unsigned int fq_mask;
-    int fq_irq;
-
-    /* page request queue */
-    struct riscv_iommu_page_request *pq;
-    // struct iopf_queue *pq_work;
-    unsigned int pq_mask;
-    int pq_irq;
-
-    /* performance monitoring interrupt */
-    int pmip_irq;
+    /* queues */
+    struct riscv_iommu_cmd_queue cmd_queue;
+    struct riscv_iommu_fault_queue fault_queue;
+    struct riscv_iommu_page_req_queue preq_queue;
 };
 
 /* Xen specific code. */

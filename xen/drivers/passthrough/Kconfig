@@ -61,6 +61,13 @@ config INTEL_IOMMU
 	  This is required if your system has more than 254 CPUs.
 	  If in doubt, say Y.
 
+menu "I/O virtualization (IOMMU)"
+	depends on RISCV
+	depends on EXPERT
+	
+	source "drivers/passthrough/riscv/Kconfig"
+endmenu
+
 config IOMMU_FORCE_PT_SHARE
 	bool
 

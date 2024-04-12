@@ -1,0 +1,56 @@
+config IOMMU_DEBUG
+	bool "Debug mode"
+	default false
+	help
+		Enables debug mode.
+
+config IOMMU_CQ_ORDER
+	int "Command queue size (power of 2 of one page size (4kiB))"
+	range 0 8
+	default 2
+	help
+		Command queue size (power of 2 of one page size (4kiB))
+		Defaults and Examples:
+			8 => 1 MiB    (65536 entries)
+			7 => 512 KiB  (32768 entries)
+			6 => 256 KiB  (16384 entries)
+			5 => 128 kiB  (8192 entries)
+			4 => 64 kiB   (4096 entries)
+			3 => 32 kiB   (2048 entries)
+			2 => 16 kiB   (1024 entries, default)
+			1 => 8 kiB    (512 entries)
+			0 => 4 kiB    (256 entries)
+			
+config IOMMU_FQ_ORDER
+	int "Fault queue size (power of 2 of one page size (4kiB))"
+	range 0 8
+	default 2
+	help
+	  	Command queue size (power of 2 of one page size (4kiB))
+	  	Defaults and Examples:
+			8 => 1 MiB    (32768 entries)
+			7 => 512 KiB  (16384 entries)
+			6 => 256 KiB  (8192 entries)
+			5 => 128 kiB  (4096 entries)
+			4 => 64 kiB   (2048 entries)
+			3 => 32 kiB   (1024 entries)
+			2 => 16 kiB   (512 entries, default)
+			1 => 8 kiB    (256 entries)
+			0 => 4 kiB    (128 entries)
+
+config IOMMU_PQ_ORDER
+	int "Page request order (power of 2 of a page size (4kiB))"
+	range 0 8
+	default 2
+	help
+	  	Command queue size (power of 2 of one page size (4kiB))
+	  	Defaults and Examples:
+			8 => 1 MiB    (65536 entries)
+			7 => 512 KiB  (32768 entries)
+			6 => 256 KiB  (16384 entries)
+			5 => 128 kiB  (8192 entries)
+			4 => 64 kiB   (4096 entries)
+			3 => 32 kiB   (2048 entries)
+			2 => 16 kiB   (1024 entries, default)
+			1 => 8 kiB    (512 entries)
+			0 => 4 kiB    (256 entries)
