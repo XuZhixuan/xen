@@ -32,6 +32,9 @@
 #include <asm/iommu_fwspec.h>
 #include <asm/irq.h>
 
+#define GET_DC_ID(i) ((uint32_t) (master->dids[i] >> 32))
+#define GET_TC_OPTS(i) ((uint32_t) master->dids[i])
+
 /* Order of the queue size (default 0 -> 4kiB) */
 #define CQ_ORDER CONFIG_IOMMU_CQ_ORDER
 #define FQ_ORDER CONFIG_IOMMU_FQ_ORDER
@@ -452,24 +455,29 @@ static int riscv_iommu_install_dc_for_dev(struct riscv_iommu_master *master)
 
     for ( int i = 0; i < master->num_dids; i++ )
     {
-        struct riscv_iommu_dc *dc =
-            riscv_iommu_get_dc(iommu_dev, master->dids[i]);
+        struct riscv_iommu_dc *dc = riscv_iommu_get_dc(iommu_dev, GET_DC_ID(i));
         if ( !dc )
         {
             dev_err(master->dev, "failed to add device ID=%u-0x%x IOMMU=%s\n",
-                    master->dids[i], master->dids[i],
-                    dev_name(fwspec->iommu_dev));
+                    GET_DC_ID(i), GET_DC_ID(i), dev_name(fwspec->iommu_dev));
             return -EINVAL;
         }
         if ( dc->tc & RISCV_IOMMU_DCTC_VALID )
         {
-            dev_err(
-                master->dev, "device ID=%u-0x%x already existe for IOMMU=%s\n",
-                master->dids[i], master->dids[i], dev_name(fwspec->iommu_dev));
+            dev_err(master->dev,
+                    "device ID=%u-0x%x already existe for IOMMU=%s\n",
+                    GET_DC_ID(i), GET_DC_ID(i), dev_name(fwspec->iommu_dev));
             return -EINVAL;
         }
 
         dc->tc = RISCV_IOMMU_DCTC_VALID;
+        dc->tc = 0;
+        if ( iommu_dev->tc_opts )
+        {
+            if ( GET_TC_OPTS(i) & RISCV_IOMMU_OPTS_TC_DTF )
+                dc->tc |= RISCV_IOMMU_DCTC_DTF;
+        }
+
         dc->iohgatp = (hgatp & ~(HGATP64_VMID_MASK)) |
                       ((uint64_t) master->domain->gscid << HGATP64_VMID_SHIFT);
         dc->ta = 0ULL;
@@ -480,18 +488,17 @@ static int riscv_iommu_install_dc_for_dev(struct riscv_iommu_master *master)
         wmb();
 
         /* invalid iommu DDT cache */
-        ret = riscv_iommu_iodir_inv_devid(iommu_dev, master->dids[i]);
+        ret = riscv_iommu_iodir_inv_devid(iommu_dev, GET_DC_ID(i));
         if ( ret )
         {
             dev_err(master->dev,
                     "unable to execute IODIR.INVAL_DDT for device ID=%u-0x%x"
                     "IOMMU=%s\n",
-                    master->dids[i], master->dids[i],
-                    dev_name(fwspec->iommu_dev));
+                    GET_DC_ID(i), GET_DC_ID(i), dev_name(fwspec->iommu_dev));
             return ret;
         }
-        dev_info(master->dev, "add device ID=%u-0x%x IOMMU=%s\n",
-                 master->dids[i], master->dids[i], dev_name(fwspec->iommu_dev));
+        dev_info(master->dev, "add device ID=%u-0x%x IOMMU=%s\n", GET_DC_ID(i),
+                 GET_DC_ID(i), dev_name(fwspec->iommu_dev));
     }
 
 #ifdef CONFIG_IOMMU_DEBUG
@@ -524,20 +531,18 @@ static void riscv_iommu_uninstall_dc_for_dev(struct riscv_iommu_master *master)
 
             wmb();
 
-            if ( riscv_iommu_iodir_inv_devid(iommu_dev, master->dids[i]) )
+            if ( riscv_iommu_iodir_inv_devid(iommu_dev, GET_DC_ID(i)) )
             {
                 /* no error raised, just warns */
                 dev_warn(
                     master->dev,
                     "unable to execute IODIR.INVAL_DDT for device ID=%u (%x) "
                     "IOMMU=%s\n",
-                    master->dids[i], master->dids[i],
-                    dev_name(fwspec->iommu_dev));
+                    GET_DC_ID(i), GET_DC_ID(i), dev_name(fwspec->iommu_dev));
             }
 
             dev_info(master->dev, "remove device ID=%u (0x%x) IOMMU=%s\n",
-                     master->dids[i], master->dids[i],
-                     dev_name(fwspec->iommu_dev));
+                     GET_DC_ID(i), GET_DC_ID(i), dev_name(fwspec->iommu_dev));
         }
     }
 
@@ -734,7 +739,31 @@ static int riscv_iommu_add_device(uint8_t devfn, struct device *dev)
 static int riscv_iommu_dt_xlate(struct device *dev,
                                 const struct dt_phandle_args *args)
 {
-    return iommu_fwspec_add_ids(dev, args->args, 1);
+    uint64_t ids;
+    struct riscv_iommu_device *iommu_dev;
+    struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
+
+    if ( !fwspec )
+        return -ENODEV;
+
+    iommu_dev = riscv_iommu_get_by_dev(fwspec->iommu_dev);
+    if ( !iommu_dev )
+        return -ENODEV;
+
+    if ( iommu_dev->tc_opts )
+    {
+        /* set the upper 32 bits with the device id and
+         * set the lower 32 bits with device translation control options
+         */
+        ids = ((uint64_t) args->args[0] << 32) + args->args[1];
+    }
+    else
+    {
+        /* no device translation control options */
+        ids = (uint64_t) args->args[0] << 32;
+    }
+
+    return iommu_fwspec_add_ids(dev, &ids, 1);
 }
 
 static void riscv_iommu_xen_domain_teardown(struct domain *d)
@@ -1225,8 +1254,11 @@ static int riscv_iommu_device_hw_probe(struct riscv_iommu_device *iommu_dev,
         dev_err(iommu_dev->dev, "missing #iommu-cells property\n");
         return -EINVAL;
     }
-    else if ( cells != 1 )
+    switch ( cells )
     {
+    case 1: iommu_dev->tc_opts = false; break;
+    case 2: iommu_dev->tc_opts = true; break;
+    default:
         dev_err(iommu_dev->dev, "invalid #iommu-cells value (%d),\n", cells);
         return -EINVAL;
     }

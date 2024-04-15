@@ -10,6 +10,8 @@
  *
  * Copyright (C) 2019 EPAM Systems Inc.
  *
+ * Copyright (C) 2024 Microchip
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms and conditions of the GNU General Public
  * License, version 2, as published by the Free Software Foundation.
@@ -66,7 +68,7 @@ void iommu_fwspec_free(struct device *dev)
     dev_iommu_fwspec_set(dev, NULL);
 }
 
-int iommu_fwspec_add_ids(struct device *dev, const uint32_t *ids,
+int iommu_fwspec_add_ids(struct device *dev, const uint64_t *ids,
                          unsigned int num_ids)
 {
     struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);

@@ -10,6 +10,8 @@
  * Copyright (C) 2007-2008 Advanced Micro Devices, Inc.
  *
  * Copyright (C) 2019 EPAM Systems Inc.
+ * 
+ * Copyright (C) 2024 Microchip
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms and conditions of the GNU General Public
@@ -35,13 +37,21 @@ struct iommu_fwspec {
     void *iommu_priv;
     /* number of associated device IDs */
     unsigned int num_ids;
-    /* IDs which this device may present to the IOMMU */
-    uint32_t ids[];
+    /* IDs/options which this device may present to the IOMMU 
+     * the upper 32 bits represent the device identifier
+     * the lower 32 bits represent the tc (translation control options)
+     *
+     * transaction control options are available if <iommu_cells> is set to 2
+     * int the device tree otherwise is <iommu_cells> is set to 1 (only device ID)
+     * for available option see RISCV_IOMMU_OPTS_xx in iommu.h
+     * 
+     */
+    uint64_t ids[];
 };
 
 int iommu_fwspec_init(struct device *dev, struct device *iommu_dev);
 void iommu_fwspec_free(struct device *dev);
-int iommu_fwspec_add_ids(struct device *dev, const uint32_t *ids,
+int iommu_fwspec_add_ids(struct device *dev, const uint64_t *ids,
                          unsigned int num_ids);
 
 static inline struct iommu_fwspec *dev_iommu_fwspec_get(struct device *dev)

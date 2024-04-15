@@ -196,6 +196,9 @@
 #define RISCV_IOMMU_DCTC_SBE BIT(10, ULL)
 #define RISCV_IOMMU_DCTC_SXL BIT(11, ULL)
 
+/* translation control options in device tree */
+#define RISCV_IOMMU_OPTS_TC_DTF BIT(0, ULL) /* not set by default */
+
 /* Shared MODE:ASID:PPN masks for GATP, SATP */
 #define RISCV_IOMMU_ATP_MODE_BARE 0
 #define RISCV_IOMMU_ATP_MODE_SV32 8
@@ -233,30 +236,30 @@
 #define RISCV_IOMMU_IODIR_MASK_DID 0xFFFFFF0000000000ULL
 
 /* Interrupt Sources */
-#define RISCV_IOMMU_INT_CQ     0
-#define RISCV_IOMMU_INT_FQ     1
-#define RISCV_IOMMU_INT_PM     2
-#define RISCV_IOMMU_INT_PQ     3
-#define RISCV_IOMMU_INT_COUNT  4
+#define RISCV_IOMMU_INT_CQ 0
+#define RISCV_IOMMU_INT_FQ 1
+#define RISCV_IOMMU_INT_PM 2
+#define RISCV_IOMMU_INT_PQ 3
+#define RISCV_IOMMU_INT_COUNT 4
 
-#define RISCV_IOMMU_IPSR_CQIP   BIT(RISCV_IOMMU_INT_CQ, UL)
-#define RISCV_IOMMU_IPSR_FQIP   BIT(RISCV_IOMMU_INT_FQ, UL)
-#define RISCV_IOMMU_IPSR_PMIP   BIT(RISCV_IOMMU_INT_PM, UL)
-#define RISCV_IOMMU_IPSR_PQIP   BIT(RISCV_IOMMU_INT_PQ, UL)
+#define RISCV_IOMMU_IPSR_CQIP BIT(RISCV_IOMMU_INT_CQ, UL)
+#define RISCV_IOMMU_IPSR_FQIP BIT(RISCV_IOMMU_INT_FQ, UL)
+#define RISCV_IOMMU_IPSR_PMIP BIT(RISCV_IOMMU_INT_PM, UL)
+#define RISCV_IOMMU_IPSR_PQIP BIT(RISCV_IOMMU_INT_PQ, UL)
 
 /* Interrupt vector mapping */
-#define RIISC_IOMMU_IVEC_CQIV   (0x0F << 0)
-#define RIISC_IOMMU_IVEC_FQIV   (0x0F << 4)
-#define RIISC_IOMMU_IVEC_PMIV   (0x0F << 8)
-#define RIISC_IOMMU_IVEC_PQIV   (0x0F << 12)
+#define RIISC_IOMMU_IVEC_CQIV (0x0F << 0)
+#define RIISC_IOMMU_IVEC_FQIV (0x0F << 4)
+#define RIISC_IOMMU_IVEC_PMIV (0x0F << 8)
+#define RIISC_IOMMU_IVEC_PQIV (0x0F << 12)
 
 /* riscv_iommu_event.reason */
-#define RISCV_IOMMU_EVENT_MASK_CAUSE    0x0000000000000FFFULL
-#define RISCV_IOMMU_EVENT_MASK_PID      0x00000000FFFFF000ULL
-#define RISCV_IOMMU_EVENT_MASK_DID      0xFFFFFF0000000000ULL
-#define RISCV_IOMMU_EVENT_PV            0x0000000100000000ULL
-#define RISCV_IOMMU_EVENT_PRIV          0x0000000200000000ULL
-#define RISCV_IOMMU_EVENT_MASK_TTYPE    0x000000FC00000000ULL
+#define RISCV_IOMMU_EVENT_MASK_CAUSE 0x0000000000000FFFULL
+#define RISCV_IOMMU_EVENT_MASK_PID 0x00000000FFFFF000ULL
+#define RISCV_IOMMU_EVENT_MASK_DID 0xFFFFFF0000000000ULL
+#define RISCV_IOMMU_EVENT_PV 0x0000000100000000ULL
+#define RISCV_IOMMU_EVENT_PRIV 0x0000000200000000ULL
+#define RISCV_IOMMU_EVENT_MASK_TTYPE 0x000000FC00000000ULL
 
 struct riscv_iommu_dc
 {
@@ -294,7 +297,8 @@ struct riscv_iommu_page_request
 };
 
 /* command queue */
-struct riscv_iommu_cmd_queue {
+struct riscv_iommu_cmd_queue
+{
     spinlock_t lock;
     struct riscv_iommu_command *cmd;
     uint32_t mask;
@@ -303,14 +307,16 @@ struct riscv_iommu_cmd_queue {
 };
 
 /* fault queue */
-struct riscv_iommu_fault_queue {
+struct riscv_iommu_fault_queue
+{
     struct riscv_iommu_event *event;
     uint32_t mask;
     uint32_t irq;
 };
 
 /* page request queue */
-struct riscv_iommu_page_req_queue {
+struct riscv_iommu_page_req_queue
+{
     struct riscv_iommu_page_request *req;
     uint32_t mask;
     uint32_t irq;
@@ -327,10 +333,10 @@ struct riscv_iommu_hw
     /* Features control register */
     uint32_t fctl;
 
-    /* nuber of interrupt */
+    /* Number of interrupts */
     uint32_t nr_irqs;
 
-    /* queues */
+    /* Queues */
     struct riscv_iommu_cmd_queue cmd_queue;
     struct riscv_iommu_fault_queue fault_queue;
     struct riscv_iommu_page_req_queue preq_queue;
@@ -379,6 +385,9 @@ struct riscv_iommu_device
 
     /* true if iommu is SiFive iommu-22 */
     bool sifive_iommu_22;
+
+    /* has translation control options */
+    bool tc_opts;
 };
 
 struct riscv_iommu_domain
@@ -417,8 +426,8 @@ struct riscv_iommu_master
     struct list_head domain_head;
 
     /* DeviceID array */
-    unsigned int *dids;
-    unsigned int num_dids;
+    uint64_t *dids;
+    uint32_t num_dids;
 
     /* device context */
     struct riscv_iommu_dc **dc;
@@ -426,7 +435,8 @@ struct riscv_iommu_master
     bool ats_enabled;
 };
 
-static inline bool is_sifive_iommu_22(struct riscv_iommu_device *iommu_dev) {
+static inline bool is_sifive_iommu_22(struct riscv_iommu_device *iommu_dev)
+{
     return iommu_dev->sifive_iommu_22;
 }
 
