@@ -471,7 +471,6 @@ static int riscv_iommu_install_dc_for_dev(struct riscv_iommu_master *master)
         }
 
         dc->tc = RISCV_IOMMU_DCTC_VALID;
-        dc->tc = 0;
         if ( iommu_dev->tc_opts )
         {
             if ( GET_TC_OPTS(i) & RISCV_IOMMU_OPTS_TC_DTF )
