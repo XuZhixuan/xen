@@ -345,6 +345,10 @@
 #define CSR_SISELECT			0x150
 #define CSR_SIREG			0x151
 
+/* Virtual-Supervisor-Level Window to Indirectly Accessed Registers (AIA) */
+#define CSR_VSISELECT		0x250
+#define CSR_VSIREG			0x251
+
 /* Supervisor-Level Interrupts (AIA) */
 #define CSR_STOPEI			0x15c
 #define CSR_STOPI			0xdb0

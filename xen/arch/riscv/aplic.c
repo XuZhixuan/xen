@@ -366,7 +366,7 @@ static int aplic_make_dom_dt_node(struct domain *d,
         return res;
 
     /* create aplic node */
-    res = fdt_begin_node(fdt, aplic_node->full_name);
+    res = fdt_begin_node(fdt, strrchr(aplic_node->full_name, '/') + 1);
     if (res)
         return res;
 

@@ -30,28 +30,28 @@
 
 #define imsic_csr_write(c, v)   \
 do {                            \
-    csr_write(CSR_SISELECT, c); \
-    csr_write(CSR_SIREG, v);    \
+    csr_write(CSR_VSISELECT, c); \
+    csr_write(CSR_VSIREG, v);    \
 } while (0)
 
 #define imsic_csr_read(c)       \
 ({                              \
     unsigned long v;            \
-    csr_write(CSR_SISELECT, c); \
-    v = csr_read(CSR_SIREG);    \
+    csr_write(CSR_VSISELECT, c); \
+    v = csr_read(CSR_VSIREG);    \
     v;                          \
 })
 
 #define imsic_csr_set(c, v)     \
 do {                            \
-    csr_write(CSR_SISELECT, c); \
-    csr_set(CSR_SIREG, v);      \
+    csr_write(CSR_VSISELECT, c); \
+    csr_set(CSR_VSIREG, v);      \
 } while (0)
 
 #define imsic_csr_clear(c, v)   \
 do {                            \
-    csr_write(CSR_SISELECT, c); \
-    csr_clear(CSR_SIREG, v);    \
+    csr_write(CSR_VSISELECT, c); \
+    csr_clear(CSR_VSIREG, v);    \
 } while (0)
 
 extern int riscv_of_processor_hartid(struct dt_device_node *node, unsigned long *hart);
@@ -59,6 +59,11 @@ extern int riscv_of_processor_hartid(struct dt_device_node *node, unsigned long 
 struct imsic_config imsic_cfg;
 static spinlock_t pool_lock;
 static int domain_id_pool[IMSIC_GEILEN] = {[0 ... IMSIC_GEILEN-1] = -1};
+
+unsigned int inspect_imsic_reg(unsigned int reg) {
+    return imsic_csr_read(reg);
+}
+EXPORT_SYMBOL(inspect_imsic_reg);
 
 static void imsic_local_eix_update(unsigned long base_id,
                                    unsigned long num_id, bool pend,
@@ -284,7 +289,7 @@ int imsic_make_dt_node(struct domain *d, void *fdt, const struct dt_device_node 
     const void *data = NULL;
     int res = 0;
 
-    res = fdt_begin_node(fdt, imsic_node->full_name);
+    res = fdt_begin_node(fdt, strrchr(imsic_node->full_name, '/') + 1);
     if ( res )
         return res;
 

@@ -10,14 +10,94 @@
 
 unsigned long raw_copy_to_guest(void *to, const void *from, unsigned len)
 {
-    WARN();
-    return -ENOSYS;
+    register unsigned long vaddr asm("t2") = (unsigned long)to;
+	register unsigned long taddr asm("t1") = (unsigned long)from;
+	register unsigned long val asm("t0");
+	register unsigned long vaddr_end asm("a1") = (unsigned long)to + len;
+
+	asm volatile ("\n"
+	".option push\n"
+	".option norvc\n"
+	"1:\n"
+	"bge %[vaddr], %[vaddr_end], 2f\n"
+#ifdef CONFIG_64BIT
+	"ld %[val], 0(%[taddr])\n"
+	/**
+	 * HSV.D val 0(vaddr)
+	 * HSV.D t0 0(t2)
+	 * 0110111 00101 00111 100 00000 1110011
+	*/
+	".word 0x6e53c073\n"
+	"addi %[vaddr], %[vaddr], 8\n"
+	"addi %[taddr], %[taddr], 8\n"
+#else
+	"lwu %[val], 0(%[taddr])\n"
+	/**
+	 * HSV.W val 0(vaddr)
+	 * HSV.W t0 0(t2)
+	 * 0110101 00101 00111 100 00000 1110011
+	*/
+	".word 0x6a53c073\n"
+	"addi %[vaddr], %[vaddr], 4\n"
+	"addi %[taddr], %[taddr], 4\n"
+#endif
+	"j 1b\n"
+	"2:\n"
+	".option pop\n"
+	: [val] "+&r" (val),
+	  [vaddr] "+r" (vaddr),
+	  [taddr] "+r" (taddr)
+	: [vaddr_end] "r" (vaddr_end)
+	: "memory"
+	);
+
+	return 0;
 }
 
 unsigned long raw_copy_from_guest(void *to, const void __user *from, unsigned len)
 {
-    WARN();
-    return -ENOSYS;
+    register unsigned long vaddr_end asm("a1") = (unsigned long)from + len;
+	register unsigned long val asm("t0");
+	register unsigned long taddr asm("t1") = (unsigned long)to;
+	register unsigned long vaddr asm("t2") = (unsigned long)from;
+
+	asm volatile ("\n"
+	".option push\n"
+	".option norvc\n"
+	"1:\n"
+	"bge %[vaddr], %[vaddr_end], 2f\n"
+#ifdef CONFIG_64BIT
+	/**
+	 * HLV.D %[val], (%[vaddr])
+	 * HLV.D t0, (t2)
+	 * 0110110 00000 00111 100 00101 1110011
+	 */
+	".word 0x6c03c2f3\n"
+	"sd t0, 0(%[taddr])\n"
+	"addi %[vaddr], %[vaddr], 8\n"
+	"addi %[taddr], %[taddr], 8\n"
+#else
+	/**
+	 * HLV.BU %[val], (%[vaddr])
+	 * HLV.BU t0, (t2)
+	 * 0110000 00001 00111 100 00101 1110011
+	 */
+	".word 0x6013c2f3\n"
+	"sb t0, 0(%[taddr])\n"
+	"addi %[vaddr], %[vaddr], 1\n"
+	"addi %[taddr], %[taddr], 1\n"
+#endif
+	"j 1b\n"
+	"2:\n"
+	".option pop\n"
+	: [val] "+&r" (val),
+	  [vaddr] "+r" (vaddr),
+	  [taddr] "+r" (taddr)
+	: [vaddr_end] "r" (vaddr_end)
+	: "memory"
+	);
+	
+	return 0;
 }
 
 unsigned long copy_to_guest_phys(struct domain *d,

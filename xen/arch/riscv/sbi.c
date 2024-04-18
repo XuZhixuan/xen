@@ -446,6 +446,10 @@ unsigned long sbi_minor_version(void)
     return sbi_spec_version & SBI_SPEC_VERSION_MINOR_MASK;
 }
 
+void sbi_system_reset(unsigned long reset_type, unsigned long reset_reason) {
+    sbi_ecall(SBI_EXT_SYSTEM_RESET, 0, reset_type, reset_reason, 0, 0, 0, 0);
+}
+
 int __init sbi_init(void)
 {
     int ret;

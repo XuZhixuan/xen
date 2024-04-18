@@ -5,6 +5,7 @@ obj-y += device.o
 obj-y += domain.o
 obj-y += domain_build.o
 obj-y += domctl.o
+obj-$(CONFIG_HAS_PCI) += pci/
 obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
 obj-y += efi/
 obj-y += entry.o
@@ -35,6 +36,7 @@ obj-y += vplic.o
 obj-y += vtimer.o
 obj-y += vsbi.o
 obj-y += vsbi_uart.o
+obj-$(CONFIG_HAS_VPCI) += vpci.c
 
 $(TARGET): $(TARGET)-syms
 	$(OBJCOPY) -O binary -S $< $@

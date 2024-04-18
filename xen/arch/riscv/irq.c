@@ -9,6 +9,13 @@
 
 const unsigned int nr_irqs = NR_IRQS;
 
+/* Describe an IRQ assigned to a guest */
+struct irq_guest
+{
+    struct domain *d;
+    unsigned int virq;
+};
+
 hw_irq_controller no_irq_type = {
 };
 
@@ -33,6 +40,7 @@ static int __setup_irq(struct irq_desc *desc, unsigned int irqflags,
     if ( shared )
         set_bit(_IRQF_SHARED, &desc->status);
 
+    new->next = desc->action;
     desc->action = new;
 
     return 0;
@@ -326,4 +334,121 @@ int platform_get_irq_byname(const struct dt_device_node *np, const char *name)
         return index;
 
     return platform_get_irq(np, index);
+}
+
+static inline struct irq_guest *irq_get_guest_info(struct irq_desc *desc)
+{
+    ASSERT(spin_is_locked(&desc->lock));
+    ASSERT(test_bit(_IRQ_GUEST, &desc->status));
+    ASSERT(desc->action != NULL);
+
+    return desc->action->dev_id;
+}
+
+static inline struct domain *irq_get_domain(struct irq_desc *desc)
+{
+    return irq_get_guest_info(desc)->d;
+}
+
+/*
+ * Route an IRQ to a specific guest.
+ * For now only SPIs are assignable to the guest.
+ */
+int route_irq_to_guest(struct domain *d, unsigned int virq,
+                       unsigned int irq, const char * devname)
+{
+    struct irqaction *action;
+    struct irq_guest *info;
+    struct irq_desc *desc;
+    unsigned long flags;
+    int retval = 0;
+
+    desc = irq_to_desc(irq);
+
+    action = xmalloc(struct irqaction);
+    if ( !action )
+        return -ENOMEM;
+
+    info = xmalloc(struct irq_guest);
+    if ( !info )
+    {
+        xfree(action);
+        return -ENOMEM;
+    }
+
+    info->d = d;
+    info->virq = virq;
+
+    action->dev_id = info;
+    action->name = devname;
+    action->free_on_release = 1;
+
+    spin_lock_irqsave(&desc->lock, flags);
+
+    if ( !is_hardware_domain(d) && desc->arch.type == IRQ_TYPE_INVALID )
+    {
+        printk(XENLOG_G_ERR "IRQ %u has not been configured\n", irq);
+        retval = -EIO;
+        goto out;
+    }
+
+    /*
+     * If the IRQ is already used by someone
+     *  - If it's the same domain -> Xen doesn't need to update the IRQ desc.
+     *  For safety check if we are not trying to assign the IRQ to a
+     *  different vIRQ.
+     *  - Otherwise -> For now, don't allow the IRQ to be shared between
+     *  Xen and domains.
+     */
+    if ( desc->action != NULL )
+    {
+        if ( test_bit(_IRQ_GUEST, &desc->status) )
+        {
+            struct domain *ad = irq_get_domain(desc);
+
+            if ( d != ad )
+            {
+                printk(XENLOG_G_ERR "IRQ %u is already used by domain %u\n",
+                       irq, ad->domain_id);
+                retval = -EBUSY;
+            }
+            else if ( irq_get_guest_info(desc)->virq != virq )
+            {
+                printk(XENLOG_G_ERR
+                       "d%u: IRQ %u is already assigned to vIRQ %u\n",
+                       d->domain_id, irq, irq_get_guest_info(desc)->virq);
+                retval = -EBUSY;
+            }
+        }
+        else
+        {
+            printk(XENLOG_G_ERR "IRQ %u is already used by Xen\n", irq);
+            retval = -EBUSY;
+        }
+        goto out;
+    }
+
+    retval = __setup_irq(desc, 0, action);
+    if ( retval )
+        goto out;
+
+    retval = gic_route_irq_to_guest(d, virq, desc);
+
+    spin_unlock_irqrestore(&desc->lock, flags);
+
+    if ( retval )
+    {
+        release_irq(desc->irq, info);
+        goto free_info;
+    }
+
+    return 0;
+
+out:
+    spin_unlock_irqrestore(&desc->lock, flags);
+    xfree(action);
+free_info:
+    xfree(info);
+
+    return retval;
 }

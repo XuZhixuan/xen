@@ -134,6 +134,47 @@ void gic_ops_register(const struct gic_hw_operations *ops)
     gic_ops = ops;
 }
 
+/* desc->irq needs to be disabled before calling this function */
+void gic_set_irq_type(struct irq_desc *desc, unsigned int type)
+{
+    ASSERT(test_bit(_IRQ_DISABLED, &desc->status));
+    ASSERT(spin_is_locked(&desc->lock));
+    ASSERT(type != IRQ_TYPE_INVALID);
+
+    gic_ops->set_irq_type(desc, type);
+}
+
+// static void gic_set_irq_priority(struct irq_desc *desc, unsigned int priority)
+// {
+//     gic_ops->set_irq_priority(desc, priority);
+// }
+
+/* Program the GIC to route an interrupt to a guest
+ *   - desc.lock must be held
+ */
+int gic_route_irq_to_guest(struct domain *d, unsigned int virq,
+                           struct irq_desc *desc)
+{
+    ASSERT(spin_is_locked(&desc->lock));
+
+    /*
+     * When routing an IRQ to guest, the virtual state is not synced
+     * back to the physical IRQ. To prevent get unsync, restrict the
+     * routing to when the Domain is been created.
+     */
+    if ( d->creation_finished )
+        return -EBUSY;
+
+    desc->handler = gic_ops->gic_guest_irq_type;
+    set_bit(_IRQ_GUEST, &desc->status);
+
+    if ( !is_hardware_domain(d) )
+        gic_set_irq_type(desc, desc->arch.type);
+    // gic_set_irq_priority(desc, priority);
+
+    return 0;
+}
+
 void __init gic_init(void)
 {
     if ( gic_ops->init && gic_ops->init() )

@@ -101,6 +101,10 @@ int gic_make_hwdom_dt_node(struct domain *d,
                            void *fdt);
 int gic_make_domu_dt_node(struct domain *d, void *fdt);
 
+void gic_set_irq_type(struct irq_desc *desc, unsigned int type);
+int gic_route_irq_to_guest(struct domain *d, unsigned int virq,
+                           struct irq_desc *desc);
+
 struct vgic* gic_alloc_vgic(struct vcpu *vcpu);
 void gic_free_vgic(struct vgic *v);
 

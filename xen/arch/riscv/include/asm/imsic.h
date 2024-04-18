@@ -86,6 +86,7 @@ struct dt_device_node;
 struct domain;
 
 int imsic_init(struct dt_device_node *node);
+unsigned int inspect_imsic_reg(unsigned int reg);
 int imsic_register_domain(const struct domain *d);
 int imsic_unregister_domain(const struct domain *d);
 int imsic_make_dt_node(struct domain *d, void *fdt, const struct dt_device_node *node);

@@ -49,6 +49,9 @@ int platform_get_irq_byname(const struct dt_device_node *np, const char *name);
 void init_IRQ(void);
 void do_IRQ(struct cpu_user_regs *regs, uint32_t irq);
 
+int route_irq_to_guest(struct domain *d, unsigned int virq,
+                       unsigned int irq, const char * devname);
+
 #endif /* _ASM_HW_IRQ_H */
 /*
  * Local variables:

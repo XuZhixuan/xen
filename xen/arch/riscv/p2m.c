@@ -38,9 +38,10 @@ int map_mmio_regions(struct domain *d,
                      unsigned long nr,
                      mfn_t mfn)
 {
-    assert_failed("need to be implemented\n");
-
-    return -1;
+    return guest_physmap_add_entry(d,
+                                   start_gfn,mfn,
+                                   get_order_from_pages(nr),
+                                   p2m_mmio_direct_dev);
 }
 
 int unmap_mmio_regions(struct domain *d,

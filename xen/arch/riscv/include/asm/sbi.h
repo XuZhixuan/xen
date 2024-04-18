@@ -29,6 +29,8 @@
 #define SBI_EXT_IPI                         0x735049
 #define SBI_EXT_RFENCE                      0x52464E43
 #define SBI_EXT_HSM                         0x48534D
+#define SBI_EXT_DEBUG_CONSOLE               0x4442434E
+#define SBI_EXT_SYSTEM_RESET                0x53525354
 
 /* SBI function IDs for BASE extension */
 #define SBI_EXT_BASE_GET_SPEC_VERSION   0x0
@@ -61,6 +63,11 @@
 #define SBI_EXT_VENDOR_START    0x09000000
 #define SBI_EXT_VENDOR_END      0x09FFFFFF
 
+/* SBI function IDs for Debug Console extension */
+#define SBI_EXT_DEBUG_CONSOLE_WRITE         0x0
+#define SBI_EXT_DEBUG_CONSOLE_READ          0x1
+#define SBI_EXT_DEBUG_CONSOLE_WRITE_BYTE    0x2
+
 /* SBI return error codes */
 #define SBI_SUCCESS             0
 #define SBI_ERR_FAILURE         -1
@@ -71,6 +78,13 @@
 #define SBI_ERR_ALREADY_AVAILABLE -6
 #define SBI_ERR_ALREADY_STARTED   -7
 #define SBI_ERR_ALREADY_STOPPED   -8
+
+/* SBI Reset Types & Reasons */
+#define SYSTEM_RESET_SHUTDOWN       0x0
+#define SYSTEM_RESET_COLD_REBOOT    0x1
+#define SYSTEM_RESET_WARM_REBOOT    0x2
+#define SYSTEM_RESET_NO_REASON      0x0
+#define SYSTEM_RESET_SYSTEM_FAILURE 0x1
 
 #define SBI_SPEC_VERSION_DEFAULT	0x1
 
@@ -252,6 +266,14 @@ int sbi_spec_is_0_1(void);
  * @return 1 for supported AND 0 for not-supported
  */
 int sbi_has_0_2_rfence(void);
+
+/*
+ * Reset system
+ * @param reset_type type of reset
+ * @param reset_reason reason of reset 
+*/
+
+void sbi_system_reset(unsigned long, unsigned long);
 
 /*
  * Get SBI spec major version

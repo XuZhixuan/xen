@@ -1,5 +1,6 @@
 #include <asm/domain_build.h>
 #include <asm/guest_access.h>
+#include <xen/config.h>
 #include <xen/domain.h>
 #include <xen/err.h>
 #include <xen/grant_table.h>
@@ -13,6 +14,7 @@
 #include <xen/libfdt/libfdt.h>
 #include <xen/iocap.h>
 
+#include <asm/imsic.h>
 #include <asm/fdtdump.h>
 #include <asm/gic.h>
 #include <asm/kernel.h>
@@ -451,6 +453,29 @@ fail:
           (unsigned long)kinfo->unassigned_mem >> 10);
 }
 
+static int __init handle_linux_pci_domain(struct kernel_info *kinfo, const struct dt_device_node *node) {
+    u16 segment; int res;
+    
+    if (!is_pci_passthrough_enabled()) return 0;
+    if (node->parent && dt_node_name_is_equal(node->parent, "pci")) return 0;
+    if (dt_find_property(node, "linux,pci-domain", NULL)) return 0;
+
+    res = pci_get_host_bridge_segment(node, &segment);
+    if (res < 0) {
+        res = pci_get_new_domain_nr();
+        if (res < 0)
+        {
+            printk(XENLOG_DEBUG "Can't assign PCI segment to %s\n", node->full_name);
+            return -FDT_ERR_NOTFOUND;
+        }
+
+        segment = res;
+        printk(XENLOG_DEBUG "Assigned segment %d to %s\n", segment, node->full_name);
+    }
+
+    return fdt_property_cell(kinfo->fdt, "linux,pci-domain", segment);
+}
+
 static int __init write_properties(struct domain *d, struct kernel_info *kinfo,
                                    const struct dt_device_node *node)
 {
@@ -546,18 +571,43 @@ static int __init write_properties(struct domain *d, struct kernel_info *kinfo,
                 continue;
         }
 
+        if ( dt_property_name_is_equal(prop, "interrupt-parent") ) {
+            fdt_property_u32(kinfo->fdt, "interrupt-parent", d->arch.phandle_gic);
+            continue;
+        }
+
+        if ( dt_property_name_is_equal(prop, "interrupt-map") ) {
+            uint32_t len; const uint32_t *origin_map; uint32_t* map;
+            origin_map = (uint32_t*)dt_get_property(node, "interrupt-map", &len);
+            map = xzalloc_array(uint32_t, len);
+            for (size_t i = 0; i < len; i++)
+            {
+                if (i % 7 == 4) {
+                    map[i] = cpu_to_fdt32(d->arch.phandle_gic);
+                } else {
+                    map[i] = origin_map[i];
+                }
+            }
+
+            fdt_property(kinfo->fdt, "interrupt-map", map, len);
+            continue;
+        }
+
+        if ( dt_property_name_is_equal(prop, "msi-parent") ) {
+            fdt_property_u32(kinfo->fdt, "msi-parent", imsic_get_config()->phandle);
+            continue;
+        }
+
         res = fdt_property(kinfo->fdt, prop->name, prop_data, prop_len);
 
         if ( res )
             return res;
     }
 
-    /*
-    res = handle_linux_pci_domain(kinfo, node);
-
-    if ( res )
-        return res;
-    */
+    if (dt_node_name_is_equal(node, "pci")) {
+        res = handle_linux_pci_domain(kinfo, node);
+        if ( res ) return res;
+    }
 
     /*
      * Override the property "status" to disable the device when it's
@@ -625,19 +675,12 @@ static int __init map_irq_to_domain(struct domain *d, unsigned int irq,
 
     if ( need_mapping )
     {
-        /*
-         * Checking the return of vgic_reserve_virq is not
-         * necessary. It should not fail except when we try to map
-         * the IRQ twice. This can legitimately happen if the IRQ is shared
-         */
-        // vgic_reserve_virq(d, irq);
-
-        // res = route_irq_to_guest(d, irq, irq, devname);
-        // if ( res < 0 )
-        // {
-        //     printk(XENLOG_ERR "Unable to map IRQ%u to %pd\n", irq, d);
-        //     return res;
-        // }
+        res = route_irq_to_guest(d, irq, irq, devname);
+        if ( res < 0 )
+        {
+            printk(XENLOG_ERR "Unable to map IRQ%u to %pd\n", irq, d);
+            return res;
+        }
     }
 
     dt_dprintk("  - IRQ: %u\n", irq);
@@ -700,14 +743,88 @@ static int __init handle_device_interrupts(struct domain *d,
     return 0;
 }
 
+static int map_pci_mmio(const struct dt_device_node *node, paddr_t addr, paddr_t length, void* opaque) {
+    struct domain *d = opaque;
+    printk(XENLOG_DEBUG "Mapping PCI addr%#"PRIpaddr" with length %#"PRIpaddr"\n", addr, length);
+    iomem_permit_access(d, addr, addr + length);
+    guest_physmap_add_entry(d, gaddr_to_gfn(addr), maddr_to_mfn(addr), get_order_from_bytes(length), p2m_mmio_direct_dev);
+    return 0;
+}
+
 static int __init handle_device(struct domain *d, struct dt_device_node *dev,
                                 p2m_type_t p2mt)
 {
-    (void) d;
-    (void) dev;
-    (void) p2mt;
+    int res;
+    paddr_t dev_addr;
+    paddr_t size;
+    bool own_device = !dt_device_for_passthrough(dev);
 
-    printk("%s: need to be implemented\n", __func__);
+    printk(XENLOG_DEBUG "Mapping device %s to domain %d\n", strrchr(dev->full_name, '/'), d->domain_id);
+
+    if ( own_device )
+    {
+        dt_dprintk("Check if %s is behind the IOMMU and add it\n",
+                   dt_node_full_name(dev));
+
+        res = iommu_add_dt_device(dev);
+        if ( res < 0 )
+        {
+            printk(XENLOG_ERR "Failed to add %s to the IOMMU\n",
+                   dt_node_full_name(dev));
+            return res;
+        }
+
+        if ( dt_device_is_protected(dev) )
+        {
+            dt_dprintk("%s setup iommu\n", dt_node_full_name(dev));
+            res = iommu_assign_dt_device(d, dev);
+            if ( res )
+            {
+                printk(XENLOG_ERR "Failed to setup the IOMMU for %s\n",
+                       dt_node_full_name(dev));
+                return res;
+            }
+        }
+    }
+
+    res = handle_device_interrupts(d, dev, true);
+    if ( res )
+        return res;
+
+    for (size_t i = 0; i < dt_number_of_address(dev); ++i) {
+        res = dt_device_get_paddr(dev, i, &dev_addr, &size);
+        if ( res < 0 ) {
+            printk(XENLOG_ERR "Unable to get %lu address of device: %s", i, dt_node_full_name(dev));
+            return res;
+        }
+
+        if ((dev_addr & (PAGE_SIZE - 1)) != 0) {
+            printk("Unaligned addr: %#"PRIpaddr"\n", dev_addr);
+            return -EINVAL;
+        }
+
+        res = iomem_permit_access(d,
+                              paddr_to_pfn(dev_addr),
+                              paddr_to_pfn(PAGE_ALIGN(dev_addr + size)));
+                              
+        if ( res ) {
+            printk(XENLOG_ERR "Unable to permit to dom%d access to"
+                        " 0x%"PRIx64" - 0x%"PRIx64"\n",
+                        d->domain_id,
+                        dev_addr & PAGE_MASK, PAGE_ALIGN(dev_addr + size) - 1);
+            return res;
+        }
+
+        res = map_mmio_regions(d, gaddr_to_gfn(dev_addr), size / PAGE_SIZE, maddr_to_mfn(dev_addr));
+        if ( res < 0 ) {
+            printk(XENLOG_ERR "Unable to map MMIO addr%#"PRIpaddr" of device: %s", dev_addr, dt_node_full_name(dev));
+            return res;
+        }
+    }
+
+    if (device_get_class(dev) == DEVICE_PCI_HOSTBRIDGE) {
+        dt_for_each_range(dev, &map_pci_mmio, (void*)d);        
+    }
 
     return 0;
 }
@@ -990,6 +1107,9 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         DT_MATCH_COMPATIBLE("syscon-poweroff"),
         DT_MATCH_COMPATIBLE("syscon-reboot"),
         DT_MATCH_COMPATIBLE("riscv,imsics"),
+        DT_MATCH_COMPATIBLE("riscv,aplic"),
+        DT_MATCH_TYPE("test"),
+        DT_MATCH_TYPE("serial"),
         DT_MATCH_PATH("/cpus"),
         DT_MATCH_TYPE("memory"),
         { /* sentinel */ },
@@ -1025,8 +1145,8 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
      * Replace these nodes with our own. Note that the original may be
      * used_by DOMID_XEN so this check comes first.
      */
-    if ( device_get_class(node) == DEVICE_GIC )
-        return make_gic_node(d, kinfo->fdt, node);
+    // if ( device_get_class(node) == DEVICE_GIC )
+    //     return make_gic_node(d, kinfo->fdt, node);
 
     if ( dt_match_node(timer_matches, node) )
         return make_timer_node(kinfo);
@@ -1058,7 +1178,7 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
                path);
 
     res = handle_device(d, node, p2mt);
-    if ( res)
+    if ( res )
         return res;
 
     /*
@@ -1077,11 +1197,11 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
     if ( res )
         return res;
 
-    for ( child = node->child; child != NULL; child = child->sibling )
-    {
-        res = handle_node(d, kinfo, child, p2mt);
-        if ( res )
-            return res;
+    if ( dt_node_name_is_equal(node, "soc") ) {
+        dt_for_each_device_node(node, child) {
+            if (device_get_class(child) == DEVICE_GIC)
+                make_gic_node(d, kinfo->fdt, child);
+        }
     }
 
     if ( node == dt_host )
@@ -1126,6 +1246,13 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         if ( res )
             return res;
         #endif
+    }
+
+    for ( child = node->child; child != NULL; child = child->sibling )
+    {
+        res = handle_node(d, kinfo, child, p2mt);
+        if ( res )
+            return res;
     }
 
     res = fdt_end_node(kinfo->fdt);
@@ -1334,6 +1461,15 @@ static int __init construct_dom0(struct domain *d)
     if ( rc < 0 )
         return rc;
 
+#ifdef CONFIG_HAS_PCI
+    rc = pci_host_bridge_mappings(d);
+    if ( rc < 0 )
+        return rc;
+#endif
+
+    for (int i = 0; i < sizeof(d->arch.auth_irq_bmp) / sizeof(d->arch.auth_irq_bmp[0]); i++)
+        d->arch.auth_irq_bmp[i] = UINT32_MAX;
+
     return construct_domain(d, &kinfo);
 }
 
@@ -1367,6 +1503,10 @@ void __init create_dom0(void)
     dom0 = domain_create(0, &dom0_cfg, true);
     if ( IS_ERR(dom0) )
         panic("Error creating domain 0 (rc = %ld)\n", PTR_ERR(dom0));
+
+    if( gic_register_domain(dom0) ) {
+        panic("Error register gic for domain 0.\n");
+    }
 
     if ( alloc_dom0_vcpu0(dom0) == NULL )
         panic("Error creating domain 0 vcpu0\n");

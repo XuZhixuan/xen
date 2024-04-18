@@ -8,12 +8,31 @@
  *
  */
 #include <xen/sched.h>
+#include <xen/config.h>
 
 #include <asm/event.h>
 #include <asm/processor.h>
 #include <asm/sbi.h>
 #include <asm/vsbi.h>
 #include <asm/vtimer.h>
+#include <asm/guest_access.h>
+
+static const unsigned long sbi_ext_implemented[] = {
+    SBI_EXT_BASE,
+    SBI_EXT_0_1_CONSOLE_GETCHAR,
+    SBI_EXT_0_1_CONSOLE_PUTCHAR,
+    SBI_EXT_0_1_REMOTE_FENCE_I,
+    SBI_EXT_0_1_REMOTE_SFENCE_VMA,
+    SBI_EXT_0_1_REMOTE_SFENCE_VMA_ASID,
+    SBI_EXT_0_1_SEND_IPI,
+    SBI_EXT_0_1_CLEAR_IPI,
+    SBI_EXT_0_1_SET_TIMER,
+    SBI_EXT_0_1_SHUTDOWN,
+    SBI_EXT_RFENCE,
+    SBI_EXT_HSM,
+};
+
+static const size_t nr_sbi_ext_implemented = ARRAY_SIZE(sbi_ext_implemented);
 
 static int vsbi_timer_set(struct vcpu *v, struct cpu_user_regs *regs)
 {
@@ -38,7 +57,12 @@ static int vsbi_ext_base(struct cpu_user_regs *regs)
         regs->a1 = sbi_fw_version;
         break;
     case SBI_EXT_BASE_PROBE_EXT:
-        regs->a1 = sbi_probe_extension(regs->a0);
+        regs->a1 = 0;
+        for (size_t i = 0; i < nr_sbi_ext_implemented; i++)
+        {
+            if (regs->a0 == sbi_ext_implemented[i])
+                regs->a1 = 1;
+        }
         break;
     case SBI_EXT_BASE_GET_MVENDORID:
         regs->a1 = 0;
@@ -180,7 +204,7 @@ void vsbi_handle_ecall(struct vcpu *vcpu, struct cpu_user_regs *regs)
         regs->a0 = vsbi_ext_hsm(vcpu, regs);
         break;
     default:
-        printk("UNKNOWN Guest SBI extension id 0x%lx, FID #%lu\n", eid, regs->a1);
+        printk("UNKNOWN Guest SBI extension id 0x%lx, FID #%lu\n", eid, regs->a6);
         regs->a0 = SBI_ERR_NOT_SUPPORTED;
         break;
     };

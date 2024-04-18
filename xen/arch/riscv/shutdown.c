@@ -2,12 +2,17 @@
 
 void machine_halt(void)
 {
-    WARN();
+    sbi_system_reset(SYSTEM_RESET_SHUTDOWN, SYSTEM_RESET_NO_REASON);
 }
 
 void machine_restart(unsigned int delay_millisecs)
 {
-    WARN();
+    for (int i = 0; i < 5; i++ )
+    {
+        printk("%u... ", 5 - i);
+        mdelay(1000);
+    }
+    sbi_system_reset(SYSTEM_RESET_COLD_REBOOT, SYSTEM_RESET_SYSTEM_FAILURE);
 }
 
 /*

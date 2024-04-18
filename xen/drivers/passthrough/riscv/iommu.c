@@ -31,6 +31,8 @@
 #include <asm/iommu.h>
 #include <asm/iommu_fwspec.h>
 #include <asm/irq.h>
+#include <asm/imsic.h>
+#include <asm/current.h>
 
 #define GET_DC_ID(i) ((uint32_t) (master->dids[i] >> 32))
 #define GET_TC_OPTS(i) ((uint32_t) master->dids[i])
@@ -43,9 +45,9 @@
 /* RISC-V IOMMU PPN <> PHYS address conversions, PPN[53:10] */
 #define RISCV_IOMMU_PPN_FIELD GENMASK_ULL(53, 10)
 #define iommu_ddt_phys_to_ppn(phys)                                            \
-    (((phys >> PAGE_SHIFT) << 10) & RISCV_IOMMU_PPN_FIELD)
+    ((((phys) >> PAGE_SHIFT) << 10) & RISCV_IOMMU_PPN_FIELD)
 #define iommu_ddt_ppn_to_phys(ppn)                                             \
-    (((ppn & RISCV_IOMMU_PPN_FIELD) >> 10) << PAGE_SHIFT)
+    ((((ppn) & RISCV_IOMMU_PPN_FIELD) >> 10) << PAGE_SHIFT)
 
 /*
  * 'ddt mode' parameter
@@ -481,6 +483,14 @@ static int riscv_iommu_install_dc_for_dev(struct riscv_iommu_master *master)
                       ((uint64_t) master->domain->gscid << HGATP64_VMID_SHIFT);
         dc->ta = 0ULL;
         dc->fsc = 0ULL;
+
+        if ( iommu_dev->extended_dc ) {
+            dc->msiptp = virt_to_mfn(master->msi_root) |
+                FIELD_PREP(RISCV_IOMMU_DC_MSIPTP_MODE, RISCV_IOMMU_DC_MSIPTP_MODE_FLAT);
+            dc->msi_addr_mask = RISCV_IOMMU_MSI_ADDR_MASK;
+            dc->msi_addr_pattern = master->imsic_base_addr >> 12;
+        }
+
         master->dc[i] = dc;
 
         /* Mark device context as valid */
@@ -595,6 +605,7 @@ static int riscv_iommu_attach_dev(struct iommu_domain *domain,
     struct riscv_iommu_device *iommu_dev;
     struct riscv_iommu_domain *iommu_domain = to_iommu_domain(domain);
     struct riscv_iommu_master *master;
+    const struct imsic_config *imsic_cfg = imsic_get_config();
 
     if ( !fwspec )
         return -ENOENT;
@@ -631,6 +642,22 @@ static int riscv_iommu_attach_dev(struct iommu_domain *domain,
     }
 
     master->domain = iommu_domain;
+
+    /* initialize MSI remapping */
+    if ( iommu_dev->extended_dc ) {
+        struct riscv_iommu_msi_pte *msi_root = 
+            xzalloc_array(struct riscv_iommu_msi_pte, RISCV_IOMMU_MSI_PTE_NUM);
+        if (!msi_root)
+            return -ENOMEM;
+
+        for (int i = 0; i < RISCV_IOMMU_MSI_PTE_NUM; i++) {
+            msi_root[i].pte = RISCV_IOMMU_MSI_PTE_V |
+                FIELD_PREP(RISCV_IOMMU_MSI_PTE_M, 3) |
+                iommu_ddt_phys_to_ppn(imsic_cfg->base_addr + i * PAGE_SIZE);
+        }
+        master->msi_root = msi_root;
+        master->imsic_base_addr = imsic_cfg->base_addr;
+    }
 
     /* install device Context */
     ret = riscv_iommu_install_dc_for_dev(master);
@@ -1247,6 +1274,11 @@ static int riscv_iommu_device_hw_probe(struct riscv_iommu_device *iommu_dev,
     int ret, iommu_version;
     uint32_t cells;
     struct riscv_iommu_hw *hw = &iommu_dev->hw;
+    u32 new_ivec;
+    uint64_t hart_id;
+    const struct imsic_config *imsic_cfg = imsic_get_config();
+    paddr_t msi_file_addr;
+    u64 icvec;
 
     if ( !dt_property_read_u32(np, "#iommu-cells", &cells) )
     {
@@ -1302,121 +1334,157 @@ static int riscv_iommu_device_hw_probe(struct riscv_iommu_device *iommu_dev,
     /* get number of interrupts */
     hw->nr_irqs = platform_get_nr_irqs(np);
 
-    /* TODO: CHECK MSI message, for the moment use only APLIC interrupt
-     * 'BOTH' is set to wire by default, change after for MSI
-     */
+    /* set fctl.WSI to determine interrupt handling approach */
+#ifdef CONFIG_USING_MSI
+    if ( !(hw->capabilities & RISCV_IOMMU_CAP_IGS_WIS) )
+#else
     if ( !(hw->capabilities & RISCV_IOMMU_CAP_IGS_BOTH) &&
          !(hw->capabilities & RISCV_IOMMU_CAP_IGS_WIS) )
+#endif /* CONFIG_USING_MSI */
     {
-        /* MSI interrupts */
+        /* using MSI interrupts */
         iommu_write32(iommu_dev, RISCV_IOMMU_REG_FCTL,
-                      hw->fctl & ~RISCV_IOMMU_CAP_IGS_WIS);
-
-        /* TODO: MSI implementation */
-        assert_failed("MSI interrupt need to be implemented");
+                      hw->fctl & ~RISCV_IOMMU_FCTL_WIS);
     }
-    else if ( hw->capabilities & RISCV_IOMMU_CAP_IGS_BOTH ||
-              hw->capabilities & RISCV_IOMMU_CAP_IGS_WIS )
+    else if ( !(hw->capabilities & RISCV_IOMMU_CAP_IGS_BOTH) ||
+              !(hw->capabilities & RISCV_IOMMU_CAP_IGS_WIS) )
     {
-        /* Wire interrupts is used first if BOTH */
-        iommu_write32(iommu_dev, RISCV_IOMMU_REG_FCTL, RISCV_IOMMU_FCTL_WIS);
-
-        if ( hw->nr_irqs == 0 )
-        {
-            /* no interrupts used */
-            riscv_iommu_disable_cmd_queue(iommu_dev);
-            riscv_iommu_disable_fault_queue(iommu_dev);
-            riscv_iommu_disable_preq_queue(iommu_dev);
-        }
-        else if ( hw->nr_irqs == 1 )
-        {
-            /* all in one interrupt */
-            ret = platform_get_irq(np, 0);
-            if ( ret < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to retrieve the IRQ\n");
-                return ret;
-            }
-            hw->cmd_queue.irq = ret;
-            hw->fault_queue.irq = ret;
-            hw->preq_queue.irq = ret;
-            iommu_write64(iommu_dev, RISCV_IOMMU_REG_IVEC, 0);
-
-            ret = request_irq(hw->cmd_queue.irq, 0, riscv_iommu_queue_handler,
-                              dev_name(iommu_dev->dev), iommu_dev);
-            if ( ret < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
-                        hw->cmd_queue.irq);
-                return ret;
-            }
-        }
-        else
-        {
-            /* get command queue interrupt */
-            hw->cmd_queue.irq = platform_get_irq_byname(np, "cmdq");
-            if ( hw->cmd_queue.irq < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to get 'cmdq' interrupt\n");
-                return -EINVAL;
-            }
-
-            ret =
-                request_irq(hw->cmd_queue.irq, 0, riscv_iommu_cmd_queue_handler,
-                            dev_name(iommu_dev->dev), iommu_dev);
-            if ( ret < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
-                        hw->cmd_queue.irq);
-                return ret;
-            }
-
-            /* get fault queue interrupt */
-            hw->fault_queue.irq = platform_get_irq_byname(np, "fltq");
-            if ( hw->fault_queue.irq < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to get 'fltq' interrupt\n");
-                return -EINVAL;
-            }
-
-            ret = request_irq(hw->fault_queue.irq, 0,
-                              riscv_iommu_flt_queue_handler,
-                              dev_name(iommu_dev->dev), iommu_dev);
-            if ( ret < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
-                        hw->fault_queue.irq);
-                return ret;
-            }
-
-            /* get page request queue interrupt */
-            hw->preq_queue.irq = platform_get_irq_byname(np, "priq");
-            if ( hw->preq_queue.irq < 0 )
-            {
-                dev_err(iommu_dev->dev, "No interrupts named 'priq'\n");
-                return -EINVAL;
-            }
-
-            ret = request_irq(hw->preq_queue.irq, 0,
-                              riscv_iommu_preq_queue_handler,
-                              dev_name(iommu_dev->dev), iommu_dev);
-            if ( ret < 0 )
-            {
-                dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
-                        hw->preq_queue.irq);
-                return ret;
-            }
-
-            /* TODO: clarify how to set interrupt cause vector in
-             * case of multiple interrupts
-             * iommu_write64(iommu_dev, RISCV_IOMMU_REG_IVEC, 0);
-             */
-        }
+        /* using wired interrupts */
+        iommu_write32(iommu_dev, RISCV_IOMMU_REG_FCTL,
+                      hw->fctl & RISCV_IOMMU_FCTL_WIS);
     }
     else
     {
         dev_err(iommu_dev->dev, "cannot allocate interrupts\n");
         return -EINVAL;
+    }
+
+    /* set vectors for IOMMU initiated interrupts */
+    if ( hw->nr_irqs == 0 )
+    {
+        /* no interrupts used */
+        riscv_iommu_disable_cmd_queue(iommu_dev);
+        riscv_iommu_disable_fault_queue(iommu_dev);
+        riscv_iommu_disable_preq_queue(iommu_dev);
+    }
+    else if ( hw->nr_irqs == 1 )
+    {
+        /* all in one interrupt */
+        ret = platform_get_irq(np, 0);
+        if ( ret < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to retrieve the IRQ\n");
+            return ret;
+        }
+        hw->cmd_queue.irq = ret;
+        hw->fault_queue.irq = ret;
+        hw->preq_queue.irq = ret;
+        iommu_write64(iommu_dev, RISCV_IOMMU_REG_IVEC, 0);
+
+        ret = request_irq(hw->cmd_queue.irq, 0, riscv_iommu_queue_handler,
+                          dev_name(iommu_dev->dev), iommu_dev);
+        if ( ret < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
+                    hw->cmd_queue.irq);
+            return ret;
+        }
+    }
+    else
+    {
+        /* get command queue interrupt */
+        hw->cmd_queue.irq = platform_get_irq_byname(np, "cmdq");
+        if ( hw->cmd_queue.irq < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to get 'cmdq' interrupt\n");
+            return -EINVAL;
+        }
+
+        ret = request_irq(hw->cmd_queue.irq, 0, riscv_iommu_cmd_queue_handler,
+                          dev_name(iommu_dev->dev), iommu_dev);
+        if ( ret < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
+                    hw->cmd_queue.irq);
+            return ret;
+        }
+
+        /* get fault queue interrupt */
+        hw->fault_queue.irq = platform_get_irq_byname(np, "fltq");
+        if ( hw->fault_queue.irq < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to get 'fltq' interrupt\n");
+            return -EINVAL;
+        }
+
+        ret = request_irq(hw->fault_queue.irq, 0,
+                          riscv_iommu_flt_queue_handler,
+                          dev_name(iommu_dev->dev), iommu_dev);
+        if ( ret < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
+                    hw->fault_queue.irq);
+            return ret;
+        }
+
+        /* get page request queue interrupt */
+        hw->preq_queue.irq = platform_get_irq_byname(np, "priq");
+        if ( hw->preq_queue.irq < 0 )
+        {
+            dev_err(iommu_dev->dev, "No interrupts named 'priq'\n");
+            return -EINVAL;
+        }
+
+        ret = request_irq(hw->preq_queue.irq, 0,
+                          riscv_iommu_preq_queue_handler,
+                          dev_name(iommu_dev->dev), iommu_dev);
+        if ( ret < 0 )
+        {
+            dev_err(iommu_dev->dev, "Unable to request the irq number %u\n",
+                    hw->preq_queue.irq);
+            return ret;
+        }
+
+        new_ivec = (0ULL << RISCV_IOMMU_IVEC_CIV) + (1ULL << RISCV_IOMMU_IVEC_FIV)
+                + (2ULL << RISCV_IOMMU_IVEC_PMIV) + (3ULL << RISCV_IOMMU_IVEC_PIV);
+        iommu_write32(iommu_dev, RISCV_IOMMU_REG_IVEC, new_ivec);
+    }
+
+    /* set MSI configuration table */
+    if ( !(hw->fctl & RISCV_IOMMU_FCTL_WIS) ) {
+        /* get the interrupt file address */
+        hart_id = cpu_physical_id(current->processor);
+        msi_file_addr = imsic_cfg->msi[hart_id].base_addr + 
+            imsic_cfg->msi[hart_id].offset;
+
+        /* set MSI table entries */
+        icvec = iommu_read64(iommu_dev, RISCV_IOMMU_REG_IVEC);
+        if ( !icvec ) {
+            /* only one vector is used */
+            iommu_write64(iommu_dev,
+                          RISCV_IOMMU_REG_MSI_CONFIG + RISCV_IOMMU_MSI_TBL_ENT_ADDR,
+                          msi_file_addr & RISCV_IOMMU_MSI_TBL_ADDR_MASK);
+            iommu_write32(iommu_dev,
+                          RISCV_IOMMU_REG_MSI_CONFIG + RISCV_IOMMU_MSI_TBL_ENT_DATA,
+                          1);
+            iommu_write32(iommu_dev,
+                          RISCV_IOMMU_REG_MSI_CONFIG + RISCV_IOMMU_MSI_TBL_ENT_CTRL,
+                          0);
+        } else {
+            /* civ, fiv, pmiv, and piv are used */
+            while (icvec) {
+                uint8_t ivec_num = icvec & RISCV_IOMMU_IVEC_VEC_MASK;
+                unsigned int msi_ent_base = RISCV_IOMMU_REG_MSI_CONFIG
+                                          + ivec_num * RISCV_IOMMU_MSI_TBL_ENT_LEN;
+                iommu_write64(iommu_dev, msi_ent_base + RISCV_IOMMU_MSI_TBL_ENT_ADDR,
+                              msi_file_addr & RISCV_IOMMU_MSI_TBL_ADDR_MASK);
+                iommu_write32(iommu_dev, msi_ent_base + RISCV_IOMMU_MSI_TBL_ENT_DATA,
+                              1);
+                iommu_write32(iommu_dev, msi_ent_base + RISCV_IOMMU_MSI_TBL_ENT_CTRL,
+                              0);
+                icvec >>= RISCV_IOMMU_IVEC_VEC_LEN;                
+            }
+        }
     }
 
     /* custom init */

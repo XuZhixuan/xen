@@ -146,6 +146,21 @@
 #define RISCV_IOMMU_PQ_ACTIVE BIT(16, UL)
 #define RISCV_IOMMU_PQ_BUSY BIT(17, UL)
 
+/* Interrupt-cause-to-vector register */
+#define RISCV_IOMMU_IVEC_CIV (0)
+#define RISCV_IOMMU_IVEC_FIV (4)
+#define RISCV_IOMMU_IVEC_PMIV (8)
+#define RISCV_IOMMU_IVEC_PIV (12)
+#define RISCV_IOMMU_IVEC_VEC_LEN (4)
+#define RISCV_IOMMU_IVEC_VEC_MASK (0xF)
+
+/* MSI configuration table */
+#define RISCV_IOMMU_MSI_TBL_ENT_LEN (16)
+#define RISCV_IOMMU_MSI_TBL_ENT_ADDR (0)
+#define RISCV_IOMMU_MSI_TBL_ENT_DATA (8)
+#define RISCV_IOMMU_MSI_TBL_ENT_CTRL (12)
+#define RISCV_IOMMU_MSI_TBL_ADDR_MASK (0x00FFFFFFFFFFFFFCULL)
+
 /* Device directory table pointer */
 #define RISCV_IOMMU_DDTP_MASK_PPN 0x003FFFFFFFFFFC00ULL
 #define RISCV_IOMMU_DDTP_MASK_MODE 0x000000000000000FULL
@@ -195,6 +210,12 @@
 #define RISCV_IOMMU_DCTC_DPE BIT(9, ULL)
 #define RISCV_IOMMU_DCTC_SBE BIT(10, ULL)
 #define RISCV_IOMMU_DCTC_SXL BIT(11, ULL)
+
+/* device context MSI extended info */
+#define RISCV_IOMMU_DC_MSIPTP_PPN GENMASK(43, 0)
+#define RISCV_IOMMU_DC_MSIPTP_MODE GENMASK(63, 60)
+#define RISCV_IOMMU_DC_MSIPTP_MODE_OFF 0
+#define RISCV_IOMMU_DC_MSIPTP_MODE_FLAT 1
 
 /* translation control options in device tree */
 #define RISCV_IOMMU_OPTS_TC_DTF BIT(0, ULL) /* not set by default */
@@ -342,6 +363,29 @@ struct riscv_iommu_hw
     struct riscv_iommu_page_req_queue preq_queue;
 };
 
+/* MSI related definitions adapted from the Linux IOMMU driver */
+struct riscv_iommu_msi_pte {
+	u64 pte;
+	u64 mrif_info;
+};
+
+/* Implementation defined MSI mask */
+#define RISCV_IOMMU_MSI_PTE_NUM     (256)
+#define RISCV_IOMMU_MSI_ADDR_MASK   GENMASK(7, 0)
+
+/* Fields on basic mode MSI PTE */
+#define RISCV_IOMMU_MSI_MASK_PPN	GENMASK(53, 10)
+#define RISCV_IOMMU_MSI_PTE_V		BIT(0, ULL)
+#define RISCV_IOMMU_MSI_PTE_M		GENMASK(2, 1)
+#define RISCV_IOMMU_MSI_PTE_MRIF_ADDR	GENMASK(53, 7)	/* When M == 1 (MRIF mode) */
+#define RISCV_IOMMU_MSI_PTE_PPN		RISCV_IOMMU_MSI_MASK_PPN	/* When M == 3 (basic mode) */
+#define RISCV_IOMMU_MSI_PTE_C		BIT(63, ULL)
+
+/* Fields on MRIF mode MSI PTE */
+#define RISCV_IOMMU_MSI_MRIF_NID	GENMASK(9, 0)
+#define RISCV_IOMMU_MSI_MRIF_NPPN	RISCV_IOMMU_MSI_MASK_PPN
+#define RISCV_IOMMU_MSI_MRIF_NID_MSB	BIT(60, ULL)
+
 /* Xen specific code. */
 struct iommu_domain
 {
@@ -431,6 +475,10 @@ struct riscv_iommu_master
 
     /* device context */
     struct riscv_iommu_dc **dc;
+
+    /* interrupt remapping */
+    struct riscv_iommu_msi_pte *msi_root;
+    uint64_t imsic_base_addr;
 
     bool ats_enabled;
 };

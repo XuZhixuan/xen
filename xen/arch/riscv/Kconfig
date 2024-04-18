@@ -4,6 +4,7 @@ config RISCV
 config RISCV_64
 	def_bool y
 	select 64BIT
+	select HVM
 	# can be removed when Xen's common code will be ready
 	select EARLY_PRINTK
 	select BOOTFDT
@@ -12,6 +13,7 @@ config RISCV_64
 	select HAS_PDX
 	select HAS_PMAP
 	select MM
+	select HAS_PCI
 	select HAS_PASSTHROUGH
 
 config ARCH_DEFCONFIG

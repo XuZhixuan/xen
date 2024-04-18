@@ -152,7 +152,7 @@ int vaplic_emulate_store(struct vcpu *vcpu, unsigned long addr, uint32_t value)
         shift = (((offset - APLIC_DOMAINCFG) / 4) % 32);
 
         /* TODO: why do we need such if/else???? Can't we just invert statement and drop break? */
-        if ( vaplic->auth_irq_bmp[index] & (1 << shift) )
+        if ( vaplic->auth_irq_bmp[index] & (1 << shift) || vcpu->domain->domain_id == 0)
             break;
         else
             /* interrupt not enabled, ignore it */
