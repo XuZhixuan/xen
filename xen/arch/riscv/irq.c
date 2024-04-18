@@ -432,7 +432,7 @@ int route_irq_to_guest(struct domain *d, unsigned int virq,
     if ( retval )
         goto out;
 
-    retval = gic_route_irq_to_guest(d, virq, desc);
+    retval = gic_route_irq_to_guest(d, virq, desc, IRQ_NO_PRIORITY);
 
     spin_unlock_irqrestore(&desc->lock, flags);
 

@@ -1,4 +1,6 @@
-#include <xen/bug.h>
+#include <xen/delay.h>
+#include <xen/lib.h>
+#include <asm/sbi.h>
 
 void machine_halt(void)
 {

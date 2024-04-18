@@ -53,7 +53,7 @@ struct gic_hw_operations {
     /* hw_irq_controller to enable/disable/eoi host irq */
     hw_irq_controller *host_irq_type;
     /* hw_irq_controller to enable/disable/eoi guest irq */
-    // hw_irq_controller *guest_irq_type;
+    hw_irq_controller *guest_irq_type;
     /* Read IRQ id and Ack */
     unsigned int (*read_irq)(void);
     /* Force the active state of an IRQ by accessing the distributor */
@@ -101,9 +101,8 @@ int gic_make_hwdom_dt_node(struct domain *d,
                            void *fdt);
 int gic_make_domu_dt_node(struct domain *d, void *fdt);
 
-void gic_set_irq_type(struct irq_desc *desc, unsigned int type);
 int gic_route_irq_to_guest(struct domain *d, unsigned int virq,
-                           struct irq_desc *desc);
+                           struct irq_desc *desc, unsigned int priority);
 
 struct vgic* gic_alloc_vgic(struct vcpu *vcpu);
 void gic_free_vgic(struct vgic *v);
