@@ -30,28 +30,28 @@
 
 #define imsic_csr_write(c, v)   \
 do {                            \
-    csr_write(CSR_VSISELECT, c); \
-    csr_write(CSR_VSIREG, v);    \
+    csr_write(CSR_SISELECT, c); \
+    csr_write(CSR_SIREG, v);    \
 } while (0)
 
 #define imsic_csr_read(c)       \
 ({                              \
     unsigned long v;            \
-    csr_write(CSR_VSISELECT, c); \
-    v = csr_read(CSR_VSIREG);    \
+    csr_write(CSR_SISELECT, c); \
+    v = csr_read(CSR_SIREG);    \
     v;                          \
 })
 
 #define imsic_csr_set(c, v)     \
 do {                            \
-    csr_write(CSR_VSISELECT, c); \
-    csr_set(CSR_VSIREG, v);      \
+    csr_write(CSR_SISELECT, c); \
+    csr_set(CSR_SIREG, v);      \
 } while (0)
 
 #define imsic_csr_clear(c, v)   \
 do {                            \
-    csr_write(CSR_VSISELECT, c); \
-    csr_clear(CSR_VSIREG, v);    \
+    csr_write(CSR_SISELECT, c); \
+    csr_clear(CSR_SIREG, v);    \
 } while (0)
 
 extern int riscv_of_processor_hartid(struct dt_device_node *node, unsigned long *hart);

@@ -547,6 +547,17 @@ static int __init write_properties(struct domain *d, struct kernel_info *kinfo,
             }
         }
 
+        if ( dt_property_name_is_equal(prop, "interrupts") )
+        {
+            uint32_t len; const uint32_t* irqs;
+            irqs = dt_get_property(node, "interrupts", &len);
+
+            for (uint32_t idx = 0, irq = 0; idx < len; irq = irqs[idx++]) {
+                irq = __cpu_to_be32(irq);
+                kinfo->d->arch.auth_irq_bmp[irq / 32] |= 1 << (irq % 32);
+            }
+        }
+
         /* Don't expose the property "xen,passthrough" to the guest */
         if ( dt_property_name_is_equal(prop, "xen,passthrough") )
             continue;
@@ -1109,7 +1120,6 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         DT_MATCH_COMPATIBLE("riscv,imsics"),
         DT_MATCH_COMPATIBLE("riscv,aplic"),
         DT_MATCH_TYPE("test"),
-        DT_MATCH_TYPE("serial"),
         DT_MATCH_PATH("/cpus"),
         DT_MATCH_TYPE("memory"),
         { /* sentinel */ },
@@ -1467,8 +1477,8 @@ static int __init construct_dom0(struct domain *d)
         return rc;
 #endif
 
-    for (int i = 0; i < sizeof(d->arch.auth_irq_bmp) / sizeof(d->arch.auth_irq_bmp[0]); i++)
-        d->arch.auth_irq_bmp[i] = UINT32_MAX;
+    // for (int i = 0; i < sizeof(d->arch.auth_irq_bmp) / sizeof(d->arch.auth_irq_bmp[0]); i++)
+    //     d->arch.auth_irq_bmp[i] = UINT32_MAX;
 
     return construct_domain(d, &kinfo);
 }

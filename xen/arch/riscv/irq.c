@@ -40,7 +40,7 @@ static int __setup_irq(struct irq_desc *desc, unsigned int irqflags,
     if ( shared )
         set_bit(_IRQF_SHARED, &desc->status);
 
-    new->next = desc->action;
+    // new->next = desc->action;
     desc->action = new;
 
     return 0;
