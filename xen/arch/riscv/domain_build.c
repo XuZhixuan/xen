@@ -1477,9 +1477,6 @@ static int __init construct_dom0(struct domain *d)
         return rc;
 #endif
 
-    // for (int i = 0; i < sizeof(d->arch.auth_irq_bmp) / sizeof(d->arch.auth_irq_bmp[0]); i++)
-    //     d->arch.auth_irq_bmp[i] = UINT32_MAX;
-
     return construct_domain(d, &kinfo);
 }
 
