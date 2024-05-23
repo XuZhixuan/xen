@@ -9,7 +9,7 @@
  */
 #include <xen/sched.h>
 #include <xen/config.h>
-
+#include <xen/shutdown.h>
 #include <asm/event.h>
 #include <asm/processor.h>
 #include <asm/sbi.h>
@@ -33,6 +33,8 @@ static const unsigned long sbi_ext_implemented[] = {
 };
 
 static const size_t nr_sbi_ext_implemented = ARRAY_SIZE(sbi_ext_implemented);
+
+static uint64_t ecall_times = 0;
 
 static int vsbi_timer_set(struct vcpu *v, struct cpu_user_regs *regs)
 {
@@ -151,6 +153,7 @@ static int vsbi_ext_hsm(struct vcpu *vcpu, struct cpu_user_regs *regs)
 void vsbi_handle_ecall(struct vcpu *vcpu, struct cpu_user_regs *regs)
 {
     unsigned long eid = regs->a7;
+    ecall_times++;
 
     switch ( eid )
     {
@@ -175,8 +178,8 @@ void vsbi_handle_ecall(struct vcpu *vcpu, struct cpu_user_regs *regs)
         regs->a0 = SBI_ERR_NOT_SUPPORTED;
         break;
     case SBI_EXT_0_1_SHUTDOWN:
-        printk("%s:%d: unimplemented: SBI_EXT_0_1_SHUTDOWN\n",
-               __FILE__, __LINE__);
+        printk("ECALL TIMES: %lu\n", ecall_times);
+        machine_halt();
         regs->a0 = SBI_ERR_NOT_SUPPORTED;
         break;
     case SBI_EXT_0_1_REMOTE_FENCE_I:

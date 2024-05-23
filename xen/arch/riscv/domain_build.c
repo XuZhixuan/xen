@@ -553,7 +553,7 @@ static int __init write_properties(struct domain *d, struct kernel_info *kinfo,
             irqs = dt_get_property(node, "interrupts", &len);
 
             for (uint32_t idx = 0, irq = 0; idx < len; irq = irqs[idx++]) {
-                irq = __cpu_to_be32(irq);
+                irq = be32_to_cpu(irq);
                 kinfo->d->arch.auth_irq_bmp[irq / 32] |= 1 << (irq % 32);
             }
         }
@@ -754,9 +754,8 @@ static int __init handle_device_interrupts(struct domain *d,
     return 0;
 }
 
-static int map_pci_mmio(const struct dt_device_node *node, paddr_t addr, paddr_t length, void* opaque) {
-    struct domain *d = opaque;
-    printk(XENLOG_DEBUG "Mapping PCI addr%#"PRIpaddr" with length %#"PRIpaddr"\n", addr, length);
+static int map_pci_mmio(paddr_t addr, paddr_t length, struct domain *d) {
+    printk("Mapping PCI addr%#"PRIpaddr" with length %#"PRIpaddr"\n", addr, length);
     iomem_permit_access(d, addr, addr + length);
     guest_physmap_add_entry(d, gaddr_to_gfn(addr), maddr_to_mfn(addr), get_order_from_bytes(length), p2m_mmio_direct_dev);
     return 0;
@@ -768,6 +767,8 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
     int res;
     paddr_t dev_addr;
     paddr_t size;
+    uint32_t *temp;
+
     bool own_device = !dt_device_for_passthrough(dev);
 
     printk(XENLOG_DEBUG "Mapping device %s to domain %d\n", strrchr(dev->full_name, '/'), d->domain_id);
@@ -834,7 +835,14 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
     }
 
     if (device_get_class(dev) == DEVICE_PCI_HOSTBRIDGE) {
-        dt_for_each_range(dev, &map_pci_mmio, (void*)d);        
+        temp = xzalloc_array(uint32_t, 7 * 3);
+        dt_property_read_u32_array(dev, "ranges", temp, 21);
+        for (int i = 0; i < 3; ++i) {
+            dev_addr = (uint64_t)temp[i * 7 + 3] << 32 | (uint64_t)temp[i * 7 + 4];
+            size = (uint64_t)temp[i * 7 + 5] << 32 | (uint64_t)temp[i * 7 + 6];
+            map_pci_mmio(dev_addr, size, d);
+        }
+        xfree(temp);
     }
 
     return 0;
